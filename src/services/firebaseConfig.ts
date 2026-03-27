@@ -1,7 +1,8 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp } from "firebase/app";
+// @ts-ignore: Firebase/auth exports getReactNativePersistence but TS sometimes fails to resolve it
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
-// Aapka purana project credentials (Aapani Dukan)
 const firebaseConfig = {
   apiKey: "AIzaSyC5HscYVxTuYIpLTDeLy6ZY5Z2OhOCogso",
   authDomain: "aapani-dukan.firebaseapp.com",
@@ -11,9 +12,12 @@ const firebaseConfig = {
   appId: "1:352463214204:web:03e436f694a6a16d1fdbf9"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Check if app already initialized
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Auth instance ko export karein
-export const auth = getAuth(app);
+// Initialize Auth with Persistence
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});
+
 export default app;

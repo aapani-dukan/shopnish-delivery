@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -12,19 +12,21 @@ import {
   ScrollView,
   StatusBar,
 } from "react-native";
+//import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha"; // 2. Recaptcha Import
+import app from "../../services/firebaseConfig";
 import Feather from "react-native-vector-icons/Feather";
 import { useAuth } from "../../context/AuthContext";
 
 export default function LoginScreen() {
   const { sendOtp, verifyOtp } = useAuth();
-
+//const recaptchaVerifier = useRef(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-
+const [confirmationResult, setConfirmationResult] = useState<any>(null);
   useEffect(() => {
     let interval: any;
     if (isOtpSent && timer > 0) {
@@ -42,12 +44,15 @@ export default function LoginScreen() {
     }
     setIsLoading(true);
     try {
-      await sendOtp(`+91${phoneNumber}`);
+      // 6. Permanent Way: appVerifier (recaptcha) pass karein
+      const confirmation = await sendOtp(`+91${phoneNumber}`);
+      setConfirmationResult(confirmation); // Result save karein verification ke liye
       setIsOtpSent(true);
       setTimer(30);
       setCanResend(false);
     } catch (err: any) {
-      Alert.alert("Error", "OTP भेजने में समस्या हुई।");
+      console.error(err);
+      Alert.alert("Error", "OTP भेजने में समस्या हुई। Firebase Console check karein.");
     } finally {
       setIsLoading(false);
     }
@@ -57,14 +62,14 @@ export default function LoginScreen() {
     if (otpCode.length < 6) return;
     setIsLoading(true);
     try {
-      await verifyOtp(otpCode);
+      // 7. Verify function ko confirmation aur code dono chahiye
+      await verifyOtp(confirmationResult, otpCode);
     } catch (err: any) {
       Alert.alert("Verification Failed", "Galat OTP, kripya sahi code dalein.");
     } finally {
       setIsLoading(false);
     }
   };
-
   // Helper functions to render dynamic parts (Clean code)
   const renderButtonContent = (label: string) => {
     if (isLoading) return <ActivityIndicator color="#D4AF37" />;
@@ -76,6 +81,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
+    
       <StatusBar barStyle="light-content" backgroundColor="#001B3A" />
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.headerSection}>

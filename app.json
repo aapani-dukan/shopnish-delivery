@@ -13,20 +13,34 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shopnish.delivery"
+      "bundleIdentifier": "com.shopnish.delivery",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Aapke area ke orders dikhane ke liye location zaroori hai."
+      }
     },
-    "android": {
+   "android": {
       "package": "com.shopnish.delivery",
+      "googleServicesFile": "./google-services.json", 
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-asset",
+      "@react-native-firebase/auth",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Shopnish Delivery to access your location."
+        }
+      ]
+    ]
   }
 }

@@ -14,7 +14,7 @@ import MyTasksScreen from '../screens/Dashboard/MyTasksScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import BatchDetailsScreen from '../screens/Dashboard/BatchDetailsScreen';
 import DeliveryTrackingScreen from '../screens/Dashboard/DeliveryTrackingScreen';
-
+import RegistrationScreen from '../screens/RegistrationScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -45,6 +45,7 @@ function DeliveryTabs() {
 }
 
 // --- MAIN NAVIGATOR ---
+// --- MAIN NAVIGATOR ---
 export default function AppNavigator() {
   const { user, isAuthenticated, isLoadingAuth } = useAuth();
 
@@ -58,24 +59,31 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {/* 1. Agar user logged in nahi hai (Firebase) */}
       {!isAuthenticated ? (
         <Stack.Screen name="Login" component={LoginScreen} />
       ) : (
         <>
-          {/* Main Delivery Flow */}
-          <Stack.Screen name="Main" component={DeliveryTabs} />
-          
-          {/* Detailed Screens */}
-          <Stack.Screen 
-            name="BatchDetails" 
-            component={BatchDetailsScreen} 
-            options={{ headerShown: true, title: 'Order Details' }} 
-          />
-          <Stack.Screen 
-            name="Tracking" 
-            component={DeliveryTrackingScreen} 
-            options={{ headerShown: false }} 
-          />
+          {/* 2. Agar user login hai par Backend mein nahi hai (New User) */}
+          {user?.isNewUser ? (
+            <Stack.Screen name="Registration" component={RegistrationScreen} />
+          ) : (
+            <>
+              {/* 3. Approved Delivery Boy Flow */}
+              <Stack.Screen name="Main" component={DeliveryTabs} />
+              
+              <Stack.Screen 
+                name="BatchDetails" 
+                component={BatchDetailsScreen} 
+                options={{ headerShown: true, title: 'Order Details' }} 
+              />
+              <Stack.Screen 
+                name="Tracking" 
+                component={DeliveryTrackingScreen} 
+                options={{ headerShown: false }} 
+              />
+            </>
+          )}
         </>
       )}
     </Stack.Navigator>
