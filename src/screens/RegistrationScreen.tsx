@@ -14,6 +14,7 @@ import * as Location from 'expo-location';
 // 📋 Validation Schema (Delivery specific fields)
 const registrationSchema = z.object({
   fullName: z.string().min(3, "Pura naam likhein"),
+  email: z.string().email("Valid email(gmail) address dein"),
   address: z.string().min(10, "Pura pata likhein (Ghar/Area)"),
   city: z.string().min(2, "City ka naam zaroori hai"),
   pincode: z.string().regex(/^\d{6}$/, "Pincode 6 digits ka hona chahiye"),
@@ -34,6 +35,7 @@ export default function RegistrationScreen() {
     resolver: zodResolver(registrationSchema),
     defaultValues: { 
       fullName: '', 
+      email: user?.email || '',
       city: '', 
       address: '', 
       pincode: '', 
@@ -87,13 +89,13 @@ export default function RegistrationScreen() {
         ...data,
         phone: user?.phoneNumber?.replace('+91', '') || "",
         firebaseUid: user?.uid,
-        email: user?.email || `${user?.phoneNumber?.replace('+', '')}@shopnish.com`,
+        //email: user?.email || `${user?.phoneNumber?.replace('+', '')}@shopnish.com`,
       };
 
       console.log("📤 Sending Delivery Application:", payload);
 
       // ✅ Using '/apply' to handle existing users without duplicate key error
-      const response = await api.post('/api/delivery/apply', payload);
+      const response = await api.post('/api/delivery/register', payload);
 
       if (response.status === 201 || response.status === 200) {
         Alert.alert("Success 🎉", "Application submitted! Admin approval ka intezar karein.", [
@@ -118,7 +120,16 @@ export default function RegistrationScreen() {
 
       <View style={styles.formCard}>
         <CustomInput control={control} name="fullName" label="Pura Naam" icon="user" error={errors.fullName} />
-        
+        // formCard ke andar, Full Name ke neeche ise dalo:
+<CustomInput 
+  control={control} 
+  name="email" 
+  label="Gmail ID (Web login ke liye)" 
+  icon="mail" 
+  keyboardType="email-address"
+  autoCapitalize="none"
+  error={errors.email} 
+/>
         <TouchableOpacity onPress={detectLocation} style={styles.locationBtn}>
           {isLocating ? <ActivityIndicator color="#0369A1" /> : (
             <View style={{flexDirection: 'row', alignItems: 'center'}}>
@@ -141,7 +152,7 @@ export default function RegistrationScreen() {
 
         <CustomInput control={control} name="vehicleType" label="Vehicle Type (Bike/Cycle)" icon="truck" error={errors.vehicleType} />
         <CustomInput control={control} name="vehicleNumber" label="Vehicle Number" icon="activity" error={errors.vehicleNumber} />
-
+        
         <TouchableOpacity 
           style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]} 
           onPress={handleSubmit(onSubmit)}
