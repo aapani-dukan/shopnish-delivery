@@ -58,18 +58,20 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {/* 1. Agar user logged in nahi hai (Firebase) */}
+   <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         <Stack.Screen name="Login" component={LoginScreen} />
       ) : (
         <>
-          {/* 2. Agar user login hai par Backend mein nahi hai (New User) */}
-          {user?.isNewUser ? (
+          {/* ✅ Naya logic: Agar user ka status 'pending' hai 
+              ya wo 'isNewUser' hai (Registration nahi ki), 
+              toh dono cases mein use RegistrationScreen par hi rakho */}
+          {(user?.isNewUser || user?.currentDeliveryStatus === 'pending') ? (
             <Stack.Screen name="Registration" component={RegistrationScreen} />
           ) : (
             <>
-              {/* 3. Approved Delivery Boy Flow */}
+              {/* ✅ Jab status 'approved' ho jaye (isNewUser false ho jayega), 
+                  tabhi ye Main tabs khulenge */}
               <Stack.Screen name="Main" component={DeliveryTabs} />
               
               <Stack.Screen 

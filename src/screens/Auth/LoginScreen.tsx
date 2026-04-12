@@ -59,123 +59,125 @@ const [confirmationResult, setConfirmationResult] = useState<any>(null);
   };
 
   const handleVerifyOtp = async () => {
-    if (otpCode.length < 6) return;
-    setIsLoading(true);
-    try {
-      // 7. Verify function ko confirmation aur code dono chahiye
-      await verifyOtp(confirmationResult, otpCode);
-    } catch (err: any) {
-      Alert.alert("Verification Failed", "Galat OTP, kripya sahi code dalein.");
-    } finally {
-      setIsLoading(false);
+    if (otpCode.length < 6) {
+        Alert.alert("Adhura OTP", "Bhai, pure 6 digit dalo.");
+        return;
     }
-  };
+    
+    setIsLoading(true);
+    
+    // 1. Result ko variable mein pakdo
+    const result = await verifyOtp(confirmationResult, otpCode);
+    
+    setIsLoading(false);
+
+    // 2. Ab check karo ki success hua ya nahi
+    if (result && !result.success) {
+        // Agar context ne error bheja hai, toh alert dikhao
+        Alert.alert("Verification Failed", "Bhai, OTP galat hai ya expire ho gaya hai.");
+    } 
+    // Agar success: true hai, toh AuthContext ka navigation khud hi user ko aage le jayega.
+};
   // Helper functions to render dynamic parts (Clean code)
   const renderButtonContent = (label: string) => {
     if (isLoading) return <ActivityIndicator color="#D4AF37" />;
     return <Text style={styles.buttonText}>{label}</Text>;
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-    
-      <StatusBar barStyle="light-content" backgroundColor="#001B3A" />
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerSection}>
-          <View style={styles.logoCircle}>
-            <Feather name="truck" size={40} color="#D4AF37" />
+
+return (
+  <KeyboardAvoidingView
+    behavior={Platform.OS === "ios" ? "padding" : "height"}
+    style={styles.container}
+  >
+    <StatusBar barStyle="light-content" backgroundColor="#001B3A" />
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View style={styles.headerSection}>
+        <View style={styles.logoCircle}>
+          <Feather name="truck" size={40} color="#D4AF37" />
+        </View>
+        <Text style={styles.brandName}>SHOPNISH</Text>
+        <Text style={styles.portalName}>DELIVERY PARTNER</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          {isOtpSent ? "Confirm OTP" : "Partner Login"}
+        </Text>
+        <Text style={styles.cardSubtitle}>
+          {isOtpSent 
+            ? `+91 ${phoneNumber} par bheja gaya code bharein` 
+            : "Apne delivery partner account mein login karein"}
+        </Text>
+
+        {!isOtpSent ? (
+          <View key="phone-input">
+            <Text style={styles.label}>Mobile Number</Text>
+            <View style={styles.inputContainer}>
+              <Feather name="phone" size={20} color="#94a3b8" style={styles.inputIcon} />
+              <Text style={styles.prefix}>+91</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="00000 00000"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholderTextColor="#cbd5e1"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.mainButton, isLoading && { opacity: 0.7 }]}
+              onPress={handleSendOtp}
+              disabled={isLoading}
+            >
+              {renderButtonContent("Get OTP")}
+            </TouchableOpacity>
           </View>
-          <Text style={styles.brandName}>SHOPNISH</Text>
-          <Text style={styles.portalName}>DELIVERY PARTNER</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            {isOtpSent ? "Confirm OTP" : "Partner Login"}
-          </Text>
-          <Text style={styles.cardSubtitle}>
-            {isOtpSent
-              ? `+91 ${phoneNumber} par bheja gaya code bharein`
-              : "Apne delivery partner account mein login karein"}
-          </Text>
-
-          {!isOtpSent ? (
-            <View>
-              <Text style={styles.label}>Mobile Number</Text>
-              <View style={styles.inputContainer}>
-                <Feather name="phone" size={20} color="#94a3b8" style={styles.inputIcon} />
-                <Text style={styles.prefix}>+91</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="00000 00000"
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  placeholderTextColor="#cbd5e1"
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.mainButton, isLoading && { opacity: 0.7 }]}
-                onPress={handleSendOtp}
-                disabled={isLoading}
-              >
-                {renderButtonContent("Get OTP")}
-              </TouchableOpacity>
+        ) : (
+          <View key="otp-input">
+            <Text style={styles.label}>Enter 6-Digit OTP</Text>
+            <View style={styles.inputContainer}>
+              <Feather name="shield" size={20} color="#94a3b8" style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { letterSpacing: 8, fontWeight: "bold" }]}
+                placeholder="000000"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otpCode}
+                onChangeText={(text) => {
+                  setOtpCode(text);
+                  if (text.length === 6 && !isLoading) handleVerifyOtp();
+                }}
+                autoFocus
+              />
             </View>
-          ) : (
-            <View>
-              <Text style={styles.label}>Enter 6-Digit OTP</Text>
-              <View style={styles.inputContainer}>
-                <Feather name="shield" size={20} color="#94a3b8" style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { letterSpacing: 8, fontWeight: "bold" }]}
-                  placeholder="000000"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={otpCode}
-                  onChangeText={(text) => {
-                    setOtpCode(text);
-                    if (text.length === 6) handleVerifyOtp();
-                  }}
-                  autoFocus
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.mainButton}
-                onPress={handleVerifyOtp}
-                disabled={isLoading}
-              >
-                {renderButtonContent("Verify & Login")}
-              </TouchableOpacity>
-
-              <View style={styles.resendRow}>
-                {canResend ? (
-                  <TouchableOpacity onPress={handleSendOtp}>
-                    <Text style={styles.resendLink}>Resend OTP</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.timerText}>Resend in {timer}s</Text>
-                )}
-                <TouchableOpacity onPress={() => setIsOtpSent(false)}>
-                  <Text style={styles.changeNumber}>Change Number</Text>
+            <TouchableOpacity
+              style={styles.mainButton}
+              onPress={handleVerifyOtp}
+              disabled={isLoading}
+            >
+              {renderButtonContent("Verify & Login")}
+            </TouchableOpacity>
+            <View style={styles.resendRow}>
+              {canResend ? (
+                <TouchableOpacity onPress={handleSendOtp}>
+                  <Text style={styles.resendLink}>Resend OTP</Text>
                 </TouchableOpacity>
-              </View>
+              ) : (
+                <Text style={styles.timerText}>Resend in {timer}s</Text>
+              )}
+              <TouchableOpacity onPress={() => setIsOtpSent(false)}>
+                <Text style={styles.changeNumber}>Change Number</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-
-        <Text style={styles.footerText}>Shopnish Logistics © 2026</Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  </KeyboardAvoidingView>
+);
+} 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#001B3A" },
   scrollContent: { flexGrow: 1, justifyContent: "center", paddingBottom: 40 },

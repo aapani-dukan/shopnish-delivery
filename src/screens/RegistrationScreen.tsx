@@ -10,7 +10,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import * as Location from 'expo-location';
-
+import { Button } from 'react-native-paper'; // ✅ Paper wala import karein
 // 📋 Validation Schema (Delivery specific fields)
 const registrationSchema = z.object({
   fullName: z.string().min(3, "Pura naam likhein"),
@@ -27,10 +27,42 @@ const registrationSchema = z.object({
 type RegistrationFormData = z.infer<typeof registrationSchema>;
 
 export default function RegistrationScreen() {
-  const { user, refreshUserStatus, logout } = useAuth();
+  const { user, refreshUserStatus, logout, isLoadingAuth } = useAuth();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isLocating, setIsLocating] = React.useState(false);
+// ✅ 1. Loading Check
+  if (isLoadingAuth) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#001B3A' }}>
+        <ActivityIndicator size="large" color="#D4AF37" />
+      </View>
+    );
+  }
 
+  // ✅ 2. Pending Status Logic (Jab form submit ho chuka ho)
+  if (user?.currentDeliveryStatus === 'pending') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#001B3A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#D4AF37', marginBottom: 10 }}>
+          Bhai, thoda intezar karo! ⏳
+        </Text>
+        <Text style={{ textAlign: 'center', color: '#94a3b8', fontSize: 16, marginBottom: 25 }}>
+          Aapka form Admin ke paas approval ke liye gaya hai. Jaise hi approve hoga, aapka dashboard chalu ho jayega.
+        </Text>
+        
+        <TouchableOpacity 
+          onPress={() => refreshUserStatus()}
+          style={{ backgroundColor: '#D4AF37', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 }}
+        >
+          <Text style={{ color: '#001B3A', fontWeight: 'bold', fontSize: 16 }}>Status Check Karein</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={logout} style={{ marginTop: 20 }}>
+          <Text style={{ color: '#ef4444', fontWeight: 'medium' }}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
   const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     defaultValues: { 
@@ -120,7 +152,7 @@ export default function RegistrationScreen() {
 
       <View style={styles.formCard}>
         <CustomInput control={control} name="fullName" label="Pura Naam" icon="user" error={errors.fullName} />
-        // formCard ke andar, Full Name ke neeche ise dalo:
+        
 <CustomInput 
   control={control} 
   name="email" 

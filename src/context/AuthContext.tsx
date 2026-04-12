@@ -8,71 +8,65 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
   sendOtp: (phoneNumber: string) => Promise<FirebaseAuthTypes.ConfirmationResult>;
-  verifyOtp: (confirm: FirebaseAuthTypes.ConfirmationResult, otpCode: string) => Promise<void>;
+  verifyOtp: (confirm: FirebaseAuthTypes.ConfirmationResult, otpCode: string) => Promise<{ success: boolean; error?: any } | void>;
   logout: () => Promise<void>;
   refreshUserStatus: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  // --- User Sync Logic ---
   const syncUserWithBackend = async (firebaseUser: FirebaseAuthTypes.User) => {
     try {
-      setIsLoadingAuth(true);
+      // setIsLoadingAuth(true); // Isse loop ban sakta hai, dhyan se use karein
       const token = await firebaseUser.getIdToken(true);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       const res = await api.post('/api/delivery/login'); 
       
       const fullUserData = res.data?.user || res.data;
+      
+      //  Object ko hamesha safely set karein
       setUser({
-        uid: firebaseUser.uid,
-        phoneNumber: firebaseUser.phoneNumber,
-        ...fullUserData           
+        uid: firebaseUser.uid || '',
+        phoneNumber: firebaseUser.phoneNumber || '',
+        ...fullUserData,
+        isNewUser: false           
       });
 
     } catch (err: any) {
-  // 🟠 Case: Token sahi hai par user database mein nahi mila (Backend 401 de raha hai)
-  if (err.response?.status === 401 || err.response?.status === 404) {
-    console.log("User not found or Auth failed, showing Registration...");
-    
-    // 💡 Yahan logout nahi karenge, balki user ko flag denge
-    setUser({
-      uid: firebaseUser.uid,
-      phoneNumber: firebaseUser.phoneNumber,
-      isNewUser: true // 👈 Isse Registration Screen khul jayegi
-    });
-  } 
-  // 🔴 Case: Real Network/Server Error
-  else {
-    console.error("Asli Error:", err.message);
-    Alert.alert("Network Error", "Server response nahi de raha.");
-    setUser(null);
-  }
-} finally {
-  setIsLoadingAuth(false);
-}
+      if (err.response?.status === 401 || err.response?.status === 404) {
+        setUser({
+          uid: firebaseUser.uid,
+          phoneNumber: firebaseUser.phoneNumber,
+          isNewUser: true 
+        });
+      } else {
+        console.error("Sync Error:", err.message);
+        // Alert.alert hatao, console rakho taaki background sync app na roke
+        setUser(null);
+      }
+    } finally {
+      setIsLoadingAuth(false);
+    }
   };
 
-  // --- Auth State Listener ---
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
+    const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
       if (firebaseUser) {
-        await syncUserWithBackend(firebaseUser);
+        syncUserWithBackend(firebaseUser);
       } else {
         setUser(null);
         setIsLoadingAuth(false);
       }
     });
-
     return () => unsubscribe(); 
   }, []);
 
-  // 1. Send OTP
   const sendOtp = async (phoneNumber: string) => {
     try {
       const confirmation = await auth().signInWithPhoneNumber(phoneNumber);
@@ -85,16 +79,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 2. Verify OTP
   const verifyOtp = async (confirm: FirebaseAuthTypes.ConfirmationResult, otpCode: string) => {
-    try {
-      const credential = await confirm.confirm(otpCode);
-      if (credential?.user) {
-        await syncUserWithBackend(credential.user);
-      }
-    } catch (error: any) {
-      console.error("OTP Verification Error:", error.code, error.message);
-      throw error;
+  if (!confirm) {
+    console.error("Confirm object missing!");
+    return { success: false, error: "Session expired. Try again." };
+  }
+
+  try {
+    const credential = await confirm.confirm(otpCode);
+    if (credential?.user) {
+      await syncUserWithBackend(credential.user);
+      return { success: true };
     }
-  };
+  } catch (error: any) {
+    // Yahan throw mat karo, return karo taaki UI handle kar sake
+    console.log("OTP Verification Error:", error.code);
+    return { success: false, error: error.code };
+  }
+};
 
   // 3. Logout
   const logout = async () => {

@@ -102,11 +102,67 @@
       },
       "oauth_client": [
         {
+          "client_id": "352463214204-2elbfdkejovh214in9vgnavj8qg1pi8k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.delivery",
+            "certificate_hash": "a7267eb2ce07577292afade28f6bbd9f8cf47e65"
+          }
+        },
+        {
           "client_id": "352463214204-6tthf33jdlbu5fcsgktltpp9m0ilkj1o.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.shopnish.delivery",
             "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:881bf7fc4fc491f21fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.delivery.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-65pilg0eimae1btnj3r9c65m8dpq2jd7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.delivery.debug",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-k9trn4s71d7otdnm6fhsfsscl4ktlntc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.delivery.debug",
+            "certificate_hash": "a7267eb2ce07577292afade28f6bbd9f8cf47e65"
           }
         },
         {
