@@ -12,13 +12,17 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
 import { apiRequest } from '../../services/queryClient';
-
+import api from '../../services/api';
 export default function AvailableBatchesScreen({ navigation }: any) {
   const queryClient = useQueryClient();
 
   // 1. Fetch Available Batches
   const { data: batches, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['/delivery-boys/available-batches'],
+    queryFn: async () => {
+    const res = await api.get("/api/delivery-boys/available-batches"); // Apna api call yahan likho
+    return res.data;
+  },
   });
 
   // 2. Mutation: Claim Batch (Order Accept Karna)
