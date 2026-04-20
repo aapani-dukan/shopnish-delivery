@@ -2,7 +2,7 @@ import axios from "axios";
 import { getAuth } from "@react-native-firebase/auth";
 
 const api = axios.create({
-  baseURL: "https://shopnish-seprate.onrender.com", 
+  baseURL: "https://api.shopnish.com", 
   timeout: 15000, 
   headers: {
     "Content-Type": "application/json",

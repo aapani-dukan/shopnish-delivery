@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { auth } from '../services/firebaseConfig';
 
-const SOCKET_URL = "https://shopnish-seprate.onrender.com";
+const SOCKET_URL = "https://api.shopnish.com";
 
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null);

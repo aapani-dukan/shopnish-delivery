@@ -19,31 +19,34 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // --- DELIVERY TAB NAVIGATION ---
-//function DeliveryTabs() {
- // const { user } = useAuth();
 const DeliveryTabs = () => {
   const { user, refreshUserStatus } = useAuth();
 
-  // 🚩 Agar pending hai toh dashboard ki jagah ye screen dikhegi
-  if (user?.currentDeliveryStatus === 'pending') {
+  // ✅ CONFIRMED: Logs ke mutabiq ye do fields check karni hain
+  const status = user?.approvalStatus || user?.user?.deliveryApprovalStatus;
+
+  // 🚩 Agar status pending hai, toh Dashboard nahi, Message dikhao
+  if (status === 'pending') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#001B3A', padding: 20 }}>
-        <Text style={{ fontSize: 60, marginBottom: 20 }}>⏳</Text>
+        <Text style={{ fontSize: 70, marginBottom: 20 }}>⏳</Text>
         <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold', textAlign: 'center' }}>
-          Account Pending Approval
+          Verification Pending
         </Text>
-        <Text style={{ color: '#94a3b8', textAlign: 'center', marginTop: 10, fontSize: 16 }}>
-          Bhai, thoda intezar karein. Admin approve karte hi dashboard khul jayega.
+        <Text style={{ color: '#94a3b8', textAlign: 'center', marginTop: 15, fontSize: 16, lineHeight: 22 }}>
+          aapka registration mil gaya hai. Admin approval ke baad dashboard chalu ho jayega.
         </Text>
+        
         <TouchableOpacity 
-          onPress={refreshUserStatus} 
-          style={{ marginTop: 30, backgroundColor: '#D4AF37', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 }}
+          onPress={refreshUserStatus}
+          style={{ backgroundColor: '#D4AF37', marginTop: 30, paddingVertical: 15, paddingHorizontal: 40, borderRadius: 10 }}
         >
           <Text style={{ color: '#001B3A', fontWeight: 'bold' }}>Status Check Karein</Text>
         </TouchableOpacity>
       </View>
     );
   }
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
