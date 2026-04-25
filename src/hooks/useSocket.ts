@@ -9,50 +9,67 @@ export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const initSocket = async () => {
-      // 1. Firebase se fresh token lein (Backend Auth ke liye)
-      const token = await auth.currentUser?.getIdToken();
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
 
-      socketRef.current = io(SOCKET_URL, {
-        transports: ['websocket'],
-        auth: { token: `Bearer ${token}` }, // 🚩 Backend middleware ke liye zaroori
-        reconnection: true,
-      });
+        // ✅ IMPORTANT: Fresh token lein taaki Socket Auth fail na ho
+        const token = await user.getIdToken(true); 
 
-      socketRef.current.on('connect', () => {
-        console.log('✅ Socket Connected: Ready to stream location');
-        setIsConnected(true);
-        
-        // Admin updates aur naye orders ke liye client register karein
-        socketRef.current?.emit('register-client', { 
-          role: 'delivery-boy', 
-          userId: auth.currentUser?.uid 
+        socketRef.current = io(SOCKET_URL, {
+          transports: ['websocket'],
+          auth: { token: `Bearer ${token}` }, // Backend hamesha Bearer mangta hai
+          reconnection: true,
+          reconnectionAttempts: 5,
         });
-      });
 
-      socketRef.current.on('disconnect', () => {
-        setIsConnected(false);
-      });
+        socketRef.current.on('connect', () => {
+          if (isMounted) {
+            console.log('✅ Socket Connected');
+            setIsConnected(true);
+            
+            // Client register karein
+            socketRef.current?.emit('register-client', { 
+              role: 'delivery-boy', 
+              userId: user.uid 
+            });
+          }
+        });
+
+        socketRef.current.on('connect_error', (err) => {
+          console.error("❌ Socket Connection Error:", err.message);
+          // Agar auth error hai toh token refresh karke dubara try karein
+          if (err.message.includes("Authentication")) {
+             setIsConnected(false);
+          }
+        });
+
+        socketRef.current.on('disconnect', () => {
+          if (isMounted) setIsConnected(false);
+        });
+
+      } catch (err) {
+        console.error("❌ Socket Initialization Error:", err);
+      }
     };
 
     initSocket();
 
     return () => {
+      isMounted = false;
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
   }, []);
 
-  // 🚀 Function: Live location bhejne ke liye
   const emitLocation = useCallback((batchId: number, lat: number, lng: number) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit('deliveryBoy:location_update', {
-        batchId,
-        lat,
-        lng,
-      });
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('deliveryBoy:location_update', { batchId, lat, lng });
     }
-  }, [isConnected]);
+  }, []);
 
   return { isConnected, emitLocation, socket: socketRef.current };
 };

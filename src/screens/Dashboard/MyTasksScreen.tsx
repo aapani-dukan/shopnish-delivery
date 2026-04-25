@@ -5,6 +5,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import { apiRequest } from '../../services/queryClient';
 import { useSocket } from '../../hooks/useSocket';
 import axios from 'axios';
+import api from '../../services/api';
 export default function MyTasksScreen({ navigation }: any) {
   const queryClient = useQueryClient();
   const { emitLocation, isConnected } = useSocket();
@@ -15,7 +16,7 @@ const { data: myTasks, isLoading } = useQuery({
   queryKey: ['/delivery/my-tasks'],
   queryFn: async () => {
     // 💡 Note: Agar axios import nahi hai toh top par import axios from 'axios' zaroor likhna
-    const response = await axios.get('/api/delivery/batches');
+   const response = await api.get("/api/delivery/batches");
     
     // Agar backend data ko { batches: [...] } format mein bhej raha hai
     return response.data.batches || response.data; 
