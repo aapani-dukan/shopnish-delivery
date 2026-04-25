@@ -18,23 +18,25 @@ export default function AvailableBatchesScreen({ navigation }: any) {
 
   // 1. Fetch Available Batches
   const { data: batches, isLoading, isRefetching, refetch } = useQuery({
-    queryKey: ['/delivery-boys/available-batches'],
+    queryKey: ['/delivery/available-batches'],
     queryFn: async () => {
-    const res = await api.get("/api/delivery-boys/available-batches"); // Apna api call yahan likho
-    return res.data;
-  },
+      const res = await api.get("/api/delivery/available-batches");
+      return res.data;
+    },
   });
 
   // 2. Mutation: Claim Batch (Order Accept Karna)
   const claimMutation = useMutation({
-    mutationFn: (batchId: number) => apiRequest('POST', `/delivery-boys/claim-batch/${batchId}`),
+    // 💡 Backend Logic: Humne Controller mein PATCH use kiya tha, wahi yahan rakhein
+    mutationFn: (batchId: number) => api.patch(`/api/delivery/batches/${batchId}/claim`),
     onSuccess: () => {
       Alert.alert("Success", "Batch claim ho gaya hai! Ab aap delivery shuru kar sakte hain.");
-      queryClient.invalidateQueries({ queryKey: ['/delivery-boys/available-batches'] });
-      navigation.navigate('My Tasks'); // Claim karne ke baad Tasks wale tab par bhej do
+      queryClient.invalidateQueries({ queryKey: ['/delivery/available-batches'] });
+      navigation.navigate('My Tasks'); 
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Batch claim karne mein samasya hui.");
+      const errorMsg = error.response?.data?.error || "Batch claim karne mein samasya hui.";
+      Alert.alert("Error", errorMsg);
     }
   });
 
@@ -43,18 +45,20 @@ export default function AvailableBatchesScreen({ navigation }: any) {
       <View style={styles.cardHeader}>
         <Text style={styles.batchId}>Batch #{item.id}</Text>
         <View style={styles.priceTag}>
-          <Text style={styles.priceText}>₹{item.totalEarnings || '50'}</Text>
+          <Text style={styles.priceText}>₹{item.deliveryCharge || item.delivery_charge || '40'}</Text>
         </View>
       </View>
 
       <View style={styles.infoRow}>
-        <Feather name="map-pin" size={14} color="#64748b" />
-        <Text style={styles.infoText}>{item.orders?.length || 0} Orders in this batch</Text>
+        <Feather name="package" size={14} color="#64748b" />
+        <Text style={styles.infoText}>{item.totalSubOrders || 0} Shop(s) to visit</Text>
       </View>
 
       <View style={styles.infoRow}>
-        <Feather name="navigation" size={14} color="#64748b" />
-        <Text style={styles.infoText}>Pickup: Main Market, Bundi</Text> 
+        <Feather name="shopping-bag" size={14} color="#64748b" />
+        <Text style={styles.infoText} numberOfLines={2}>
+          Pickup: {item.pickupShops || "Unknown Shop"}
+        </Text>
       </View>
 
       <TouchableOpacity 
@@ -69,7 +73,7 @@ export default function AvailableBatchesScreen({ navigation }: any) {
         )}
       </TouchableOpacity>
     </View>
-  );
+  ); // ✅ Bracket yahan sahi band hua hai
 
   if (isLoading) {
     return (
@@ -87,7 +91,7 @@ export default function AvailableBatchesScreen({ navigation }: any) {
       </View>
 
       <FlatList
-        data={batches as any[]}
+        data={(batches as any)?.batches || []}
         renderItem={renderBatchItem}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}

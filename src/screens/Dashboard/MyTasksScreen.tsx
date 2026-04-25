@@ -4,16 +4,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
 import { apiRequest } from '../../services/queryClient';
 import { useSocket } from '../../hooks/useSocket';
-
+import axios from 'axios';
 export default function MyTasksScreen({ navigation }: any) {
   const queryClient = useQueryClient();
   const { emitLocation, isConnected } = useSocket();
   const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
 
   // 1. Apne accepted batches fetch karein
-  const { data: myTasks, isLoading } = useQuery({
-    queryKey: ['/delivery-boys/my-tasks'],
-  });
+const { data: myTasks, isLoading } = useQuery({
+  queryKey: ['/delivery/my-tasks'],
+  queryFn: async () => {
+    // 💡 Note: Agar axios import nahi hai toh top par import axios from 'axios' zaroor likhna
+    const response = await axios.get('/api/delivery/batches');
+    
+    // Agar backend data ko { batches: [...] } format mein bhej raha hai
+    return response.data.batches || response.data; 
+  },
+  // Refresh interval (Optional): Har 30 second mein automatic update ke liye
+  refetchInterval: 30000, 
+});
 
   // 2. Start Journey Logic (Socket Start karega)
   const startJourney = (batch: any) => {

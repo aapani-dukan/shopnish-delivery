@@ -3,14 +3,20 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'rea
 import Feather from 'react-native-vector-icons/Feather';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-
+import axios from 'axios';
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
 
-  // 1. Delivery Boy ki profile aur earnings fetch karein
-  const { data: profile } = useQuery({
-    queryKey: ['/delivery-boys/profile'],
-  });
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
+  queryKey: ['/delivery/profile'],
+  queryFn: async () => {
+    // Yahan hum actual API call kar rahe hain
+    const response = await axios.get('/api/delivery/profile'); 
+    return response.data;
+  },
+  // Optional: Agar profile baar-baar fetch nahi karni toh staleTime badha sakte hain
+  staleTime: 5 * 60 * 1000, 
+});
 
   const handleLogout = () => {
     Alert.alert("Logout", "Kya aap sach mein logout karna chahte hain?", [

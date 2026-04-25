@@ -3,22 +3,26 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, Alert } fr
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
 import { apiRequest } from '../../services/queryClient';
-
+import axios from 'axios';
 export default function BatchDetailsScreen({ route, navigation }: any) {
   const { batchId } = route.params;
   const queryClient = useQueryClient();
 
   // 1. Batch ke andar ke saare orders fetch karein
   const { data: batch, isLoading } = useQuery({
-    queryKey: [`/delivery-boys/batch-details/${batchId}`],
+    queryKey: [`/delivery/batch-details/${batchId}`],
+    queryFn: async () => {
+      const response = await axios.get(`/api/delivery/batch-details/${batchId}`);
+      return response.data;
+    }
   });
 
   // 2. Mark as Delivered Mutation
   const completeMutation = useMutation({
-    mutationFn: (orderId: number) => apiRequest('POST', `/delivery-boys/complete-order/${orderId}`),
+    mutationFn: (orderId: number) => apiRequest('POST', `/delivery/complete-order/${orderId}`),
     onSuccess: () => {
       Alert.alert("Success", "Order delivered successfully!");
-      queryClient.invalidateQueries({ queryKey: [`/delivery-boys/batch-details/${batchId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/delivery/batch-details/${batchId}`] });
     },
   });
 
