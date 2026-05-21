@@ -1,38 +1,117 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, Alert } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
-import { apiRequest } from '../../services/queryClient';
 import { useSocket } from '../../hooks/useSocket';
-import axios from 'axios';
 import api from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export default function MyTasksScreen({ navigation }: any) {
   const queryClient = useQueryClient();
-  const { emitLocation, isConnected } = useSocket();
+  const { isConnected, socket } = useSocket(); // 👈 Socket instance nikala live emit ke liye
   const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
+  
+  // 🎯 Geolocation watch id ko store karne ke liye useRef (taaki journey khatam hone par band ho sake)
+  const watchIdRef = useRef<number | null>(null);
+
+  // App khulte hi check karo ki koi journey pehle se chal toh nahi rahi thi
+  useEffect(() => {
+    const checkActiveJourney = async () => {
+      const savedBatchId = await AsyncStorage.getItem('activeBatchId');
+      if (savedBatchId) {
+        const bId = parseInt(savedBatchId);
+        setActiveBatchId(bId);
+        // 🔄 Agar app crash/close hui thi aur boy safar par tha, toh live tracking fir se auto-start kar do
+        startLiveTracking(bId);
+      }
+    };
+    checkActiveJourney();
+
+    // Clean up: Screen se bahar jaane par tracking band ho jaye
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   // 1. Apne accepted batches fetch karein
-const { data: myTasks, isLoading } = useQuery({
-  queryKey: ['/delivery/my-tasks'],
-  queryFn: async () => {
-    // 💡 Note: Agar axios import nahi hai toh top par import axios from 'axios' zaroor likhna
-   const response = await api.get("/api/delivery/batches");
-    
-    // Agar backend data ko { batches: [...] } format mein bhej raha hai
-    return response.data.batches || response.data; 
-  },
-  // Refresh interval (Optional): Har 30 second mein automatic update ke liye
-  refetchInterval: 30000, 
-});
+  const { data: myTasks, isLoading } = useQuery({
+    queryKey: ['/delivery/my-tasks'],
+    queryFn: async () => {
+      const response = await api.get("/api/delivery/batches");
+      return response.data.batches || response.data; 
+    },
+    refetchInterval: 30000, 
+  });
+// 📡 2. ZOMATO STYLE LIVE TRACKING SENDER (Updated with Type Fix)
+  const startLiveTracking = (batchId: number) => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
 
-  // 2. Start Journey Logic (Socket Start karega)
-  const startJourney = (batch: any) => {
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, heading } = position.coords;
+
+        if (socket && socket.connected) {
+          console.log(`🚀 Sending Bike Live Location: Lat ${latitude}, Lng ${longitude}`);
+          socket.emit('delivery:location-update', {
+            batchId: batchId,
+            latitude: latitude,
+            longitude: longitude,
+            heading: heading || 0 
+          });
+        }
+      },
+      (error) => console.error("🚨 Live GPS Error:", error),
+      // 🎯 FIX: 'as any' lagane se type definition wali error turant khatam ho jayegi
+      {
+        enableHighAccuracy: true, 
+        distanceFilter: 1,        
+        maximumAge: 0
+      } as any 
+    );
+  };
+  
+  // 3. Start Journey Logic
+  const startJourney = async (batch: any) => {
     setActiveBatchId(batch.id);
-    Alert.alert("Journey Started", "Aapka live location ab customers ko dikh raha hai.");
+    await AsyncStorage.setItem('activeBatchId', batch.id.toString());
     
-    // Yahan hum Google Maps khol sakte hain pickup location ke liye
-    const url = `https://www.google.com/maps/dir/?api=1&destination=Bundi+Main+Market`;
-    Linking.openURL(url);
+    Alert.alert("Journey Started", "Aapka live location ab customers ko real-time dikh raha hai."); 
+    
+    // Live tracking shooter ko start karein
+    startLiveTracking(batch.id);
+
+    // Dynamic map URL generation
+    const targetLat = batch.pickupPoints?.[0]?.latitude || batch.deliveryLat;
+    const targetLng = batch.pickupPoints?.[0]?.longitude || batch.deliveryLng;
+
+    let url = "";
+    if (targetLat && targetLng) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`;
+    } else {
+      const cleanAddress = encodeURIComponent(batch.pickupAddresses || "Bundi Market");
+      url = `https://www.google.com/maps/dir/?api=1&destination=${cleanAddress}`;
+    }
+
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Error", "Maps open nahi ho paa raha hai.");
+    });
+  };
+
+  // 4. Confirm Pickup Logic
+  const handleConfirmPickup = async (batchId: number) => {
+    // Live tracking ka loop band karo kyunki shop par pahunch gaye hain
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    await AsyncStorage.removeItem('activeBatchId');
+    setActiveBatchId(null);
+    Alert.alert("Pickup Confirmed", "Ab aap agla safar customer ke liye shuru kar sakte hain.");
   };
 
   const renderTask = ({ item }: any) => (
@@ -42,22 +121,51 @@ const { data: myTasks, isLoading } = useQuery({
       </View>
       
       <Text style={styles.batchTitle}>Batch #{item.id}</Text>
-      <Text style={styles.orderCount}>{item.orders?.length} Orders to deliver</Text>
+      
+      <View style={styles.infoRow}>
+        <Feather name="shopping-bag" size={16} color="#475569" />
+        <Text style={styles.shopText} numberOfLines={1}>
+          {item.pickupShops || "Unknown Shop"}
+        </Text>
+      </View>
+
+      <View style={styles.infoRow}>
+        <Feather name="map-pin" size={14} color="#64748b" />
+        <Text style={styles.addressText} numberOfLines={2}>
+          {item.pickupAddresses || "Address Not Available"}
+        </Text>
+      </View>
+
+      <Text style={styles.orderCount}>📦 {item.totalSubOrders || item.orders?.length || 0} Orders to deliver</Text>
 
       <View style={styles.divider} />
 
       <View style={styles.actionRow}>
-        <TouchableOpacity 
-          style={styles.mapBtn} 
-          onPress={() => startJourney(item)}
-        >
-          <Feather name="navigation" size={18} color="#001B3A" />
-          <Text style={styles.btnText}>Start Journey</Text>
-        </TouchableOpacity>
+        {/* 🎯 RE-RENDER FIX: State aur Storage ke combination se button maintain rahega */}
+        {activeBatchId === item.id ? (
+          <TouchableOpacity 
+            style={[styles.mapBtn, { backgroundColor: '#10b981' }]} 
+            onPress={() => handleConfirmPickup(item.id)}
+          >
+            <Feather name="check-square" size={18} color="#fff" />
+            <Text style={[styles.btnText, { color: '#fff' }]}>Confirm Pickup</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.mapBtn} 
+            onPress={() => startJourney(item)}
+          >
+            <Feather name="navigation" size={18} color="#001B3A" />
+            <Text style={styles.btnText}>Start Journey</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity 
           style={styles.detailBtn}
-          onPress={() => navigation.navigate('BatchDetails', { batchId: item.id })}
+          onPress={() => navigation.navigate('BatchDetails', { 
+            batchId: item.id,
+            batchData: item 
+          })}
         >
           <Text style={styles.detailText}>View Orders</Text>
         </TouchableOpacity>
@@ -102,8 +210,11 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 15, elevation: 5 },
   statusBadge: { alignSelf: 'flex-start', backgroundColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginBottom: 10 },
   statusText: { fontSize: 10, fontWeight: 'bold', color: '#475569' },
-  batchTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  orderCount: { color: '#64748b', marginTop: 4 },
+  batchTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 8 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, paddingRight: 5 },
+  shopText: { fontSize: 15, fontWeight: '600', color: '#334155', marginLeft: 8 },
+  addressText: { fontSize: 13, color: '#64748b', marginLeft: 10, flex: 1 },
+  orderCount: { color: '#0284c7', marginTop: 12, fontWeight: '600', fontSize: 13 },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 15 },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between' },
   mapBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
