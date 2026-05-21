@@ -15,6 +15,10 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import BatchDetailsScreen from '../screens/Dashboard/BatchDetailsScreen';
 import DeliveryTrackingScreen from '../screens/Dashboard/DeliveryTrackingScreen';
 import RegistrationScreen from '../screens/RegistrationScreen';
+import { createNavigationContainerRef } from '@react-navigation/native';
+
+// 🚨 Is ref ko export kar rahe hain taaki App.tsx ise use kar sake
+export const navigationRef = createNavigationContainerRef();
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 

@@ -16,17 +16,34 @@ import {
 import app from "../../services/firebaseConfig";
 import Feather from "react-native-vector-icons/Feather";
 import { useAuth } from "../../context/AuthContext";
+import { registerForPushNotificationsAsync } from '../../services/notificationService'; 
 
 export default function LoginScreen() {
-  const { sendOtp, verifyOtp } = useAuth();
-//const recaptchaVerifier = useRef(null);
+  const { sendOtp, verifyOtp, user } = useAuth(); // 2. Yahan 'user' nikal lijiye
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+
+  // 🚨 3. Notification Setup wala useEffect yahan set kar diya
+  useEffect(() => {
+    const setupNotifications = async () => {
+      // Check karein ki user login ho chuka hai aur uski ID hai
+      if (user && user.id) {
+        try {
+          const token = await registerForPushNotificationsAsync(user.id);
+          console.log("✅ Delivery App Token Ready:", token);
+        } catch (error) {
+          console.error("❌ Notification Setup Failed:", error);
+        }
+      }
+    };
+
+    setupNotifications();
+  }, [user]); // Jab login successful hoga, tabhi ye chalega
   useEffect(() => {
     let interval: any;
     if (isOtpSent && timer > 0) {

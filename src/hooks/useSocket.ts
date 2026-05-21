@@ -1,69 +1,153 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { auth } from '../services/firebaseConfig';
+import Sound from 'react-native-sound';
+import { Alert } from 'react-native';
+import auth from '@react-native-firebase/auth'; // Consistency ke liye @react-native-firebase/auth use kiya
+import { useAuth } from '../context/AuthContext'; // Maan kar chal raha hoon aapke paas delivery app mein bhi AuthContext hai
 
 const SOCKET_URL = "https://api.shopnish.com";
+
+// 🔔 Sound Setup
+Sound.setCategory('Playback');
+const siren = new Sound('siren.mp3', Sound.MAIN_BUNDLE, (error) => {
+  if (error) {
+    console.log('🔔 [SOUND ERROR]: Siren load nahi ho saki. Check res/raw folder.', error);
+  } else {
+    console.log('✅ [SOUND READY]: Siren file successfully load ho chuki hai.');
+  }
+});
 
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const { user } = useAuth(); // Delivery boy details ke liye
+
+  // 🛑 Siren Stop Function (Seller App Style)
+  const stopSiren = () => {
+    try {
+      if (siren && siren.isLoaded()) {
+        siren.pause(); 
+        siren.setCurrentTime(0);
+        console.log('✅ Siren Shanti: Stopped and Reset');
+      }
+    } catch (err) {
+      console.log('❌ Stop Error bypassed:', err);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     const initSocket = async () => {
       try {
-        const user = auth.currentUser;
-        if (!user) return;
+        const token = await auth().currentUser?.getIdToken(true);
+        if (!token) return;
 
-        // ✅ IMPORTANT: Fresh token lein taaki Socket Auth fail na ho
-        const token = await user.getIdToken(true); 
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+        }
 
         socketRef.current = io(SOCKET_URL, {
-          transports: ['websocket'],
-          auth: { token: `Bearer ${token}` }, // Backend hamesha Bearer mangta hai
+          transports: ['polling', 'websocket'], // Robustness ke liye dono
+          secure: true,
           reconnection: true,
-          reconnectionAttempts: 5,
+          auth: { token: `Bearer ${token}` },
         });
 
-        socketRef.current.on('connect', () => {
-          if (isMounted) {
-            console.log('✅ Socket Connected');
-            setIsConnected(true);
+        const socket = socketRef.current;
+
+        socket.on('connect', () => {
+          if (!isMounted) return;
+          console.log('✅ [DELIVERY SOCKET CONNECTED]: ID ->', socket.id);
+          setIsConnected(true);
+
+          if (user?.id) {
+            // Room join karein (Future targeted alerts ke liye)
+            const uRoom = `user_room_${user.id}`;
+            socket.emit('join-room', uRoom);
             
-            // Client register karein
-            socketRef.current?.emit('register-client', { 
-              role: 'delivery-boy', 
-              userId: user.uid 
-            });
+            // 🚨 SIREN LOGIC FOR ALL DELIVERY BOYS (Broadcasting)
+            // Seller app jab "Ready for Pickup" karegi, toh ye event fire hoga
+            const globalDeliveryEvent = 'new-available-delivery';
+            
+            socket.off(globalDeliveryEvent);
+
+            // 📢 Alert handling logic
+            const handleDeliveryAlert = (data: any) => {
+              console.log('🔥 [NEW BATCH AVAILABLE]:', data);
+
+              // CRITICAL FIX: Crash-safe play logic
+              if (siren && siren.isLoaded()) {
+                try {
+                  siren.pause();
+                  siren.setCurrentTime(0);
+                  
+                  setTimeout(() => {
+                    siren.setNumberOfLoops(-1); // Loop chalta rahega jab tak action na le
+                    siren.setVolume(1.0);
+                    siren.play((success) => {
+                      if (!success) siren.reset();
+                    });
+                  }, 50); // Android safety delay
+                } catch (e) {
+                  console.log("Siren Play Error:", e);
+                }
+              }
+
+              Alert.alert(
+                "Naya Task Available! 🚚",
+                `Batch #${data.deliveryBatchId}\n📍 Pickup: ${data.pickupLocation || 'N/A'}\n👤 To: ${data.customerName || 'Customer'}`,
+                [
+                  { 
+                    text: "View Batch", 
+                    onPress: () => {
+                      stopSiren(); // User action par siren band
+                    } 
+                  },
+                  {
+                    text: "Ignore",
+                    onPress: () => stopSiren(),
+                    style: 'cancel'
+                  }
+                ],
+                { cancelable: false }
+              );
+            };
+
+            // Listen for available batches
+            socket.on(globalDeliveryEvent, handleDeliveryAlert);
           }
         });
 
-        socketRef.current.on('connect_error', (err) => {
-          console.error("❌ Socket Connection Error:", err.message);
-          // Agar auth error hai toh token refresh karke dubara try karein
-          if (err.message.includes("Authentication")) {
-             setIsConnected(false);
-          }
-        });
-
-        socketRef.current.on('disconnect', () => {
+        socket.on('connect_error', (err) => {
+          console.log('❌ [CONNECTION ERROR]:', err.message);
           if (isMounted) setIsConnected(false);
         });
 
+        socket.on('disconnect', () => {
+          if (isMounted) setIsConnected(false);
+          stopSiren();
+        });
+
       } catch (err) {
-        console.error("❌ Socket Initialization Error:", err);
+        console.log('❌ [INIT ERROR]:', err);
       }
     };
 
-    initSocket();
+    if (user?.id) {
+      initSocket();
+    }
 
     return () => {
       isMounted = false;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      if (socketRef.current) {
+        socketRef.current.off('new-available-delivery');
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      stopSiren();
     };
-  }, []);
+  }, [user?.id]);
 
   const emitLocation = useCallback((batchId: number, lat: number, lng: number) => {
     if (socketRef.current?.connected) {
@@ -71,5 +155,5 @@ export const useSocket = () => {
     }
   }, []);
 
-  return { isConnected, emitLocation, socket: socketRef.current };
+  return { isConnected, emitLocation, stopSiren, socket: socketRef.current };
 };

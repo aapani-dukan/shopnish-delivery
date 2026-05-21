@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ShopnishDelivery",
-    "slug": "ShopnishDelivery",
+    "slug": "shopnishdelivery",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,9 +18,9 @@
         "NSLocationWhenInUseUsageDescription": "Aapke area ke orders dikhane ke liye location zaroori hai."
       }
     },
-   "android": {
+    "android": {
       "package": "com.shopnish.delivery",
-      "googleServicesFile": "./google-services.json", 
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/adaptive-icon.png"
@@ -28,11 +28,14 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ]
     },
     "plugins": [
       "expo-asset",
+      "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "expo-font",
       [
@@ -41,6 +44,11 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Shopnish Delivery to access your location."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "25b3f0e8-df22-4990-9d33-e645762c1cb9"
+      }
+    }
   }
 }
