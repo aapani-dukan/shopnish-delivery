@@ -19,7 +19,14 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       return response.data;
     }
   });
-
+// 🎯 2. जादुई सुधार: 'My Task' स्क्रीन की तरह यहाँ भी उसी सटीक प्राइस एपीआई को कॉल किया
+  const { data: priceData } = useQuery({
+    queryKey: [`/delivery/batch-price/${batchId}`],
+    queryFn: async () => {
+      const response = await api.get(`/api/delivery/batch-price/${batchId}`);
+      return response.data;
+    }
+  });
   // 🎯 सेफ्टी फ़ॉलबैक: अगर route से डेटा आने में टाइम लगे तो सर्वर या लोकल जो भी हो, कम्बाइन कर लें
   const currentBatch = batchData || batchFromServer;
 
@@ -68,13 +75,17 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       </View>
     );
   };
+const renderOrder = ({ item }: any) => {
+    // 🎯 सटीक सुधार: पैरेंट ऑब्जेक्ट (currentBatch) के बजाय लूप के 'item' को पहली प्राथमिकता दी
+    // क्योंकि नाम, फोन और नियरबाय हर ऑर्डर के 'item' के अंदर आ रहे हैं
+    const bData = item || currentBatch || {};
 
-  const renderOrder = ({ item }: any) => {
-    // बैकएंड के नए फ़्लैट पेलोड के अनुसार डेटा असाइनमेंट
-    const displayCustomerName = currentBatch?.customerName || item?.customerName || 'Customer';
-    const displayCustomerPhone = currentBatch?.customerPhone || item?.customerPhone || '';
-    const displayDeliveryAddress = currentBatch?.deliveryAddress || item?.shippingAddress || 'Local Address';
-    const displayCity = currentBatch?.deliveryCity || 'Bundi';
+    // 👤 अब यह सीधे item.customerName को पढ़ेगा, ठीक उपलब्ध बैच स्क्रीन की तरह
+    const displayCustomerName = bData.customerName || 'Customer';
+    const displayCustomerPhone = bData.customerPhone || '';
+    const displayDeliveryAddress = bData.shippingAddress || bData.deliveryAddress || 'Local Address';
+    const displayCity = bData.deliveryCity || 'Bundi';
+    const displayNearBy = bData.nearBy || ''; 
 
     return (
       <View style={styles.orderCard}>
@@ -98,10 +109,34 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
         {/* 🏠 कस्टमर का पूरा पता */}
         <Text style={styles.addressText}>🏠 {displayDeliveryAddress}, {displayCity}</Text>
         
-        <View style={styles.divider} />
+        {/* 🎯 NEAR BY FIELD: अब यहाँ बिना किसी रुकावट के पीले बॉक्स में चमकेगा */}
+        {displayNearBy && displayNearBy !== "Not Provided" && displayNearBy !== "null" && (
+          <View style={{ 
+            backgroundColor: '#fef3c7', 
+            padding: 8, 
+            borderRadius: 6, 
+            marginTop: 8, 
+            flexDirection: 'row', 
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: '#fde68a'
+          }}>
+            <Feather name="compass" size={14} color="#b45309" style={{ marginRight: 6 }} />
+            <Text style={{ color: '#b45309', fontSize: 13, fontWeight: '500' }}>
+              <Text style={{ fontWeight: 'bold' }}>Nearby: </Text>
+              {displayNearBy}
+            </Text>
+          </View>
+        )}
+        
+     <View style={styles.divider} />
         
         <View style={styles.footer}>
-          <Text style={styles.amount}>Payable Amount: ₹{item?.totalAmount || currentBatch?.deliveryCharge || 'COD'}</Text>
+          {/* 🎯 टाइपस्क्रिप्ट फिक्स: सीधे 'priceData' से वैल्यू उठाई ताकि स्कोप एरर खत्म हो जाए */}
+          <Text style={[styles.amount, { color: '#ef4444' }]}>
+            Payable Amount: {priceData?.totalToCollect !== undefined ? `₹${Number(priceData.totalToCollect).toFixed(2)}` : "कैलकुलेट हो रहा है..."}
+          </Text>
+          
           <TouchableOpacity 
             style={[styles.deliverBtn, item?.status === 'delivered' && styles.disabledBtn]}
             onPress={() => completeMutation.mutate(item?.id || batchId)}
@@ -115,10 +150,8 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       </View>
     );
   };
-
-  // फ्लैटलिस्ट का डेटा या तो सर्वर के आर्डर एरे से आएगा या डमी सिंगल ऐरे बना देगा
+  
   const listData = (batchFromServer as { orders: any[] })?.orders || [currentBatch].filter(Boolean);
-
   return (
     <View style={styles.container}>
       <FlatList

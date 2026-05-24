@@ -95,12 +95,34 @@ export default function AvailableBatchesScreen({ navigation }: any) {
   });
 
 const renderBatchItem = ({ item }: any) => {
-  // 🎯 FLAT DATA EXTRACTION: Backend se direct mapped properties aa rahi hain bhai
   const customerName = item.customerName || 'Customer';
-  const deliveryAddress = item.deliveryAddress || 'Address Not Provided';
-  const deliveryCity = item.deliveryCity || '';
+  const deliveryCity = item.deliveryCity || 'Bundi';
   const customerPhone = item.customerPhone || 'N/A';
 
+  // 🎯 सटीक एड्रेस पार्सर: कोई हार्डकोडेड एड्रेस नहीं, सिर्फ रीयल डेटा
+  let finalAddress = 'N/A'; // डिफॉल्ट अब N/A है
+
+  if (item.deliveryAddress) {
+    if (typeof item.deliveryAddress === 'string' && (item.deliveryAddress.startsWith('{') || item.deliveryAddress.startsWith('['))) {
+      try {
+        const parsedAddr = JSON.parse(item.deliveryAddress);
+        const line1 = parsedAddr?.addressLine1 || parsedAddr?.address_line1 || parsedAddr?.address || "";
+        const line2 = parsedAddr?.addressLine2 || parsedAddr?.address_line2 || "";
+        
+        // अगर लाइन 1 या 2 में कुछ मिला, तभी एड्रेस दिखाएं, वरना N/A रहने दें
+        finalAddress = (line1 || line2) ? `${line1} ${line2}`.trim() : 'N/A';
+      } catch (e) {
+        finalAddress = item.deliveryAddress;
+      }
+    } else {
+      finalAddress = item.deliveryAddress;
+    }
+  }
+
+  // 🚨 अंतिम चेक: अगर एड्रेस 'Local Address' या खाली है, तो N/A ही रहने दें
+  if (finalAddress === 'Local Address' || finalAddress.trim() === "") {
+    finalAddress = 'N/A';
+  }
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -138,9 +160,18 @@ const renderBatchItem = ({ item }: any) => {
       <View style={styles.infoRow}>
         <Feather name="map-pin" size={14} color="#64748b" />
         <Text style={styles.infoText}>
-          {deliveryAddress}{deliveryCity ? `, ${deliveryCity}` : ''}
+          {finalAddress}{deliveryCity ? `, ${deliveryCity}` : ''}
         </Text>
       </View>
+      {item.nearBy && item.nearBy !== "Not Provided" && item.nearBy !== "null" && (
+        <View style={[styles.infoRow, { backgroundColor: '#fef3c7', padding: 6, borderRadius: 4, marginLeft: 20, marginTop: 2 }]}>
+          <Feather name="compass" size={12} color="#b45309" />
+          <Text style={[styles.infoText, { color: '#b45309', fontSize: 13, fontWeight: '500' }]}>
+            <Text style={{ fontWeight: 'bold' }}>Nearby: </Text>
+            {item.nearBy}
+          </Text>
+        </View>
+      )}
       <View style={styles.infoRow}>
         <Feather name="phone" size={14} color="#64748b" />
         <Text style={styles.infoText}>
