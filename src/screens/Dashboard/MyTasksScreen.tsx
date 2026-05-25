@@ -342,7 +342,7 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
           </TouchableOpacity>
         )}
         {currentStatus === 'picked_up' && (
-          <TouchableOpacity style={[styles.mapBtn, { backgroundColor: '#7c3aed' }]} onPress={() => handleStartJourneyCustomer(item, 'customer')}>
+          <TouchableOpacity style={[styles.mapBtn, { backgroundColor: '#7c3aed' }]} onPress={() => handleStartJourney(item, 'customer')}>
             <Feather name="truck" size={18} color="#fff" />
             <Text style={[styles.btnText, { color: '#fff' }]}>Start Journey (To Customer)</Text>
           </TouchableOpacity>
