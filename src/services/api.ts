@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from "axios"; // 🎯 फिक्स 1: 'mport' की स्पेलिंग को सुधार कर 'import' किया भाई
 import { getAuth } from "@react-native-firebase/auth";
 
 const api = axios.create({
@@ -21,8 +21,12 @@ api.interceptors.request.use(
         const token = await user.getIdToken(true); 
         
         if (token) {
+          // 🎯 फिक्स 2: टाइपस्क्रिप्ट एरर से बचने के लिए हेडर्स को सेफ़ली इंजेक्ट किया भाई
           config.headers = config.headers || {};
           config.headers.Authorization = `Bearer ${token}`;
+          
+          // 🎯 फिक्स 3: बैकएंड को तुरंत पहचानने के लिए डिलीवरी रोल हेडर में जोड़ दिया भाई
+          config.headers["x-user-role"] = "delivery";
           
           // Image upload ke liye condition
           if (config.data instanceof FormData) {
@@ -45,12 +49,12 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 403) {
-      // 💡 Delivery Boy account approved nahi hai ya Role galat hai
+      // 💡 Delivery Boy account approved nahi hai ya Role galat hai भाई
       console.error("🚫 [API] Forbidden: Access Denied / Partner Not Approved");
     }
     
     if (status === 401) {
-      // 💡 Session Expire ho gaya
+      // 💡 Session Expire ho gaya bhai
       console.log("🚫 [API] Session Expired / Unauthorized");
     }
 

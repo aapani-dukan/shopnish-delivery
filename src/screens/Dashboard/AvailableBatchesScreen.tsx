@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'; // 👈 React ke sath useEffect le liya
+import React, { useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,76 +7,81 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   RefreshControl,
-  Alert
+  Alert,
+  Dimensions
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
-import { apiRequest } from '../../services/queryClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as TaskManager from 'expo-task-manager';
+import * as Location from 'expo-location';
 import api from '../../services/api';
-import * as Location from 'expo-location'; // 👈 1. GPS Tracking ke liye library import ki
 
-export default function AvailableBatchesScreen({ navigation }: any) {
+// 🎯 बैकग्राउंड टास्क का यूनिक नाम (यह नाम पूरे ऐप में सेम रहेगा भाई)
+const BACKGROUND_TRACKING_TASK = 'BACKGROUND_GPS_TRACKING_TASK';
+const { width } = Dimensions.get('window');
+export default function AvailableBatchesScreen({ navigation, route }: any) {
   const queryClient = useQueryClient();
 
-  // ================= 🎯 AUTOMATIC GPS SIGNAL LOOP (BINA BUTTON KE) =================
-  useEffect(() => {
-    let locationWatcher: any = null;
-
-    const startAutomaticLocationSync = async () => {
-      try {
-        // A. Phone se GPS data lene ki permission maangein
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('📌 [GPS APP]: User ne permission nahi di, isiliye null hi rahega.');
-          return;
+  // =====================================================================
+  // 🚀 LIVE BACKGROUND GPS CONTROLLER (START / STOP LOGIC)
+  // =====================================================================
+  const startLiveTracking = async (batchId: number, journeyType: 'TO_SHOP' | 'TO_CUSTOMER') => {
+    try {
+      const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
+      if (foreStatus !== 'granted') {
+        Alert.alert("Permission Denied", "Foreground लोकेशन परमिशन की आवश्यकता है भाई।");
+        return;
+      }
+      const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (backStatus !== 'granted') {
+        Alert.alert("Permission Denied", "Background लोकेशन परमिशन को 'Always Allow' पर सेट करें भाई।");
+        return;
+      }
+      await AsyncStorage.setItem('active_tracking_batch_id', String(batchId));
+      await Location.startLocationUpdatesAsync(BACKGROUND_TRACKING_TASK, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 1500, 
+        distanceInterval: 0,
+        deferredUpdatesInterval: 1500,
+        foregroundService: {
+          notificationTitle: "Shopnish Delivery Active",
+          notificationBody: journeyType === 'TO_SHOP' ? "Going towards shop..." : "En route to customer...",
+          notificationColor: "#001B3A"
         }
+      });
+    } catch (error) {
+      console.error("❌ Error starting tracking:", error);
+    }
+  };
 
-        console.log('📌 [GPS APP]: Automatic background tracking loop initialized.');
-
-        // B. Silent continuous position tracking loop shuru karein
-        locationWatcher = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 60000,   // ⏱️ Har 1 minute (60000ms) mein hit karega
-            distanceInterval: 15,  // 🗺️ Ya fir agar 15 meter ka movement ho toh update karega
-          },
-          async (location) => {
-            const { latitude, longitude } = location.coords;
-
-            // 🚀 Phone bina bataye chupchaap backend route par latitude/longitude bhejega
-            try {
-              // Kyunki aap 'api.get' use kar rahe hain, iska matlab token axios interceptor/api instance me pehle se set hai!
-              await api.put('/api/delivery/update-location', { latitude, longitude });
-              console.log(`📍 [GPS APP]: Signal Sent Successfully -> (${latitude}, ${longitude})`);
-            } catch (err) {
-              console.error('❌ [GPS APP]: Backend location sync failed:', err);
-            }
-          }
-        );
-      } catch (error) {
-        console.error('Error in location sync execution:', error);
+  const stopLiveTracking = async (reason: string) => {
+    try {
+      const isTaskRunning = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TRACKING_TASK);
+      if (isTaskRunning) {
+        await Location.stopLocationUpdatesAsync(BACKGROUND_TRACKING_TASK);
       }
-    };
+      await AsyncStorage.removeItem('active_tracking_batch_id');
+    } catch (error) {
+      console.error("❌ Error stopping tracking:", error);
+    }
+  };
 
-    startAutomaticLocationSync();
+  useEffect(() => {
+    if (navigation) {
+      navigation.setParams({ startLiveTracking, stopLiveTracking });
+    }
+  }, [navigation]);
 
-    // Cleanup hook: Screen se hatne par ya app band hone par GPS tracking band ho jaye
-    return () => {
-      if (locationWatcher) {
-        locationWatcher.remove();
-        console.log('📌 [GPS APP]: Watcher cleanly removed.');
-      }
-    };
-  }, []);
-  // ==================================== END ====================================
-
-
-  // 1. Fetch Available Batches
-  const { data: batches, isLoading, isRefetching, refetch } = useQuery({
+  // =====================================================================
+  // 🎯 फिक्स 1: useQuery से 'batches' और 'isRefetching' दोनों को साफ़ बाहर निकाला भाई
+  // =====================================================================
+  const { data: batches = [], isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['/delivery/available-batches'],
     queryFn: async () => {
       const res = await api.get("/api/delivery/available-batches");
-      return res.data;
+      // अगर डेटा के अंदर 'batches' की है तो उसे लें, नहीं तो डायरेक्ट रेस्पॉन्स लें भाई
+      return res.data?.batches || res.data || [];
     },
   });
 
@@ -93,107 +98,107 @@ export default function AvailableBatchesScreen({ navigation }: any) {
       Alert.alert("Error", errorMsg);
     }
   });
+  const renderBatchItem = ({ item }: any) => {
+    const customerName = item.customerName || 'Customer';
+    const deliveryCity = item.deliveryCity || 'Bundi';
+    const customerPhone = item.customerPhone || 'N/A';
 
-const renderBatchItem = ({ item }: any) => {
-  const customerName = item.customerName || 'Customer';
-  const deliveryCity = item.deliveryCity || 'Bundi';
-  const customerPhone = item.customerPhone || 'N/A';
+    let finalAddress = 'N/A';
 
-  // 🎯 सटीक एड्रेस पार्सर: कोई हार्डकोडेड एड्रेस नहीं, सिर्फ रीयल डेटा
-  let finalAddress = 'N/A'; // डिफॉल्ट अब N/A है
-
-  if (item.deliveryAddress) {
-    if (typeof item.deliveryAddress === 'string' && (item.deliveryAddress.startsWith('{') || item.deliveryAddress.startsWith('['))) {
-      try {
-        const parsedAddr = JSON.parse(item.deliveryAddress);
-        const line1 = parsedAddr?.addressLine1 || parsedAddr?.address_line1 || parsedAddr?.address || "";
-        const line2 = parsedAddr?.addressLine2 || parsedAddr?.address_line2 || "";
-        
-        // अगर लाइन 1 या 2 में कुछ मिला, तभी एड्रेस दिखाएं, वरना N/A रहने दें
-        finalAddress = (line1 || line2) ? `${line1} ${line2}`.trim() : 'N/A';
-      } catch (e) {
+    if (item.deliveryAddress) {
+      if (typeof item.deliveryAddress === 'string' && (item.deliveryAddress.startsWith('{') || item.deliveryAddress.startsWith('['))) {
+        try {
+          const parsedAddr = JSON.parse(item.deliveryAddress);
+          const line1 = parsedAddr?.addressLine1 || parsedAddr?.address_line1 || parsedAddr?.address || "";
+          const line2 = parsedAddr?.addressLine2 || parsedAddr?.address_line2 || "";
+          finalAddress = (line1 || line2) ? `${line1} ${line2}`.trim() : 'N/A';
+        } catch (e) {
+          finalAddress = item.deliveryAddress;
+        }
+      } else {
         finalAddress = item.deliveryAddress;
       }
-    } else {
-      finalAddress = item.deliveryAddress;
     }
-  }
 
-  // 🚨 अंतिम चेक: अगर एड्रेस 'Local Address' या खाली है, तो N/A ही रहने दें
-  if (finalAddress === 'Local Address' || finalAddress.trim() === "") {
-    finalAddress = 'N/A';
-  }
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        {/* API response mein 'id' ya 'batchNumber' dono use kar sakte hain */}
-        <Text style={styles.batchId}>{item.batchNumber || `Batch #${item.id}`}</Text>
-        <View style={styles.priceTag}>
-          <Text style={styles.priceText}>₹{item.deliveryCharge}</Text>
+    if (finalAddress === 'Local Address' || finalAddress.trim() === "") {
+      finalAddress = 'N/A';
+    }
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.batchId}>{item.batchNumber || `Batch #${item.id}`}</Text>
+          <View style={styles.priceTag}>
+            <Text style={styles.priceText}>₹{item.deliveryCharge}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* 🏪 Shop Details */}
-      <View style={styles.infoRow}>
-        <Feather name="shopping-bag" size={14} color="#D4AF37" />
-        <Text style={styles.infoText}>
-          <Text style={{ fontWeight: 'bold' }}>Pickup: </Text>
-          {item.pickupShops || 'Unknown Shop'}
-        </Text>
-      </View>
-      <View style={[styles.infoRow, { marginLeft: 20 }]}>
-        <Text style={[styles.infoText, { fontSize: 12, color: '#64748b' }]}>
-          📍 {item.pickupAddresses || 'Address Not Available'}
-        </Text>
-      </View>
-
-      <View style={{ height: 1, backgroundColor: '#e2e8f0', marginVertical: 8 }} />
-
-      {/* 👤 Customer Details (🎯 FLAT PROPERTIES USED HERE) */}
-      <View style={styles.infoRow}>
-        <Feather name="user" size={14} color="#64748b" />
-        <Text style={styles.infoText}>
-          <Text style={{ fontWeight: 'bold' }}>To: </Text>
-          {customerName}
-        </Text>
-      </View>
-      <View style={styles.infoRow}>
-        <Feather name="map-pin" size={14} color="#64748b" />
-        <Text style={styles.infoText}>
-          {finalAddress}{deliveryCity ? `, ${deliveryCity}` : ''}
-        </Text>
-      </View>
-      {item.nearBy && item.nearBy !== "Not Provided" && item.nearBy !== "null" && (
-        <View style={[styles.infoRow, { backgroundColor: '#fef3c7', padding: 6, borderRadius: 4, marginLeft: 20, marginTop: 2 }]}>
-          <Feather name="compass" size={12} color="#b45309" />
-          <Text style={[styles.infoText, { color: '#b45309', fontSize: 13, fontWeight: '500' }]}>
-            <Text style={{ fontWeight: 'bold' }}>Nearby: </Text>
-            {item.nearBy}
+        {/* 🏪 Shop Details */}
+       <View style={styles.infoRow}>
+<Feather name="shopping-bag" size={15} color="#2563eb" />
+<View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginLeft: 6 }}>
+<Text style={{ fontWeight: 'bold', color: '#1e293b' }}>Pickup Points:</Text>
+<View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 0.5, borderColor: '#bfdbfe' }}>
+<Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '800' }}>
+{item.pickupShops?.split(',')?.length || 1} Shops
+</Text>
+</View>
+</View>
+</View>
+<View style={{ marginLeft: 22, marginBottom: 4 }}>
+<Text style={{ fontSize: 14, color: '#334155', fontWeight: '600' }}>
+{item.pickupShops || 'Unknown Shop'}
+</Text>
+<Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 16 }}>
+📍 {item.pickupAddresses || 'Address Not Available'}
+</Text>
+</View>
+<View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 10 }} />
+        {/* 👤 Customer Details */}
+        <View style={styles.infoRow}>
+          <Feather name="user" size={14} color="#64748b" />
+          <Text style={styles.infoText}>
+            <Text style={{ fontWeight: 'bold' }}>To: </Text>
+            {customerName}
           </Text>
         </View>
-      )}
-      <View style={styles.infoRow}>
-        <Feather name="phone" size={14} color="#64748b" />
-        <Text style={styles.infoText}>
-          <Text style={{ fontWeight: 'bold' }}>Call: </Text>
-          {customerPhone}
-        </Text>
-      </View>
-
-      <TouchableOpacity 
-        style={styles.claimButton}
-        onPress={() => claimMutation.mutate(item.id)}
-        disabled={claimMutation.isPending}
-      >
-        {claimMutation.isPending ? (
-          <ActivityIndicator color="#001B3A" />
-        ) : (
-          <Text style={styles.claimButtonText}>Claim This Batch</Text>
+        <View style={styles.infoRow}>
+          <Feather name="map-pin" size={14} color="#64748b" />
+          <Text style={styles.infoText}>
+            {finalAddress}{deliveryCity ? `, ${deliveryCity}` : ''}
+          </Text>
+        </View>
+        {item.nearBy && item.nearBy !== "Not Provided" && item.nearBy !== "null" && (
+          <View style={[styles.infoRow, { backgroundColor: '#fef3c7', padding: 6, borderRadius: 4, marginLeft: 20, marginTop: 2 }]}>
+            <Feather name="compass" size={12} color="#b45309" />
+            <Text style={[styles.infoText, { color: '#b45309', fontSize: 13, fontWeight: '500' }]}>
+              <Text style={{ fontWeight: 'bold' }}>Nearby: </Text>
+              {item.nearBy}
+            </Text>
+          </View>
         )}
-      </TouchableOpacity>
-    </View>
-  );
-};
+        <View style={styles.infoRow}>
+          <Feather name="phone" size={14} color="#64748b" />
+          <Text style={styles.infoText}>
+            <Text style={{ fontWeight: 'bold' }}>Call: </Text>
+            {customerPhone}
+          </Text>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.claimButton}
+          onPress={() => claimMutation.mutate(item.id)}
+          disabled={claimMutation.isPending}
+        >
+          {claimMutation.isPending ? (
+            <ActivityIndicator color="#001B3A" />
+          ) : (
+            <Text style={styles.claimButtonText}>Claim This Batch</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -210,24 +215,66 @@ const renderBatchItem = ({ item }: any) => {
         <Text style={styles.headerSubtitle}>Naye orders yahan dikhenge</Text>
       </View>
 
+     {/* 🎯 फिक्स: डेटा और की-एक्स्ट्रैक्टर पर फुल सेफ़्टी फॉलबैक लगाया भाई ताकि एरर न आए */}
       <FlatList
-        data={(batches as any)?.batches || []}
+        data={Array.isArray(batches) ? batches : (batches as any)?.batches || []}
         renderItem={renderBatchItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => String(item?.id || Math.random())}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#D4AF37" />
         }
+       // 🎯 फिक्स 2: खाली स्क्रीन पर बिना अटके मैन्युअल रिफ्रेश ट्रिगर करने के लिए बटन भाई
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Feather name="coffee" size={50} color="#94a3b8" />
-            <Text style={styles.emptyText}>Abhi koi naya batch available nahi hai. Refresh karein!</Text>
+          <View style={styles.emptyContainer || { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60, padding: 20 }}>
+            <Feather name="coffee" size={46} color="#94a3b8" />
+            <Text style={{ textAlign: 'center', color: '#64748b', marginTop: 12, fontSize: 14, fontWeight: '500', paddingHorizontal: 30 }}>
+              Abhi koi naya batch available nahi hai. Aap thodi der baad dobara check karein!
+            </Text>
+            <TouchableOpacity 
+              onPress={() => refetch()} 
+              style={{ marginTop: 15, backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#bfdbfe' }}
+            >
+              <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 13 }}>Tap to Check Again</Text>
+            </TouchableOpacity>
           </View>
         }
       />
     </View>
   );
 }
+// =====================================================================
+// 🎯 100% असली बैकग्राउंड टास्क (कम्पोनेंट के बाहर टाइपस्क्रिप्ट एरर-फ़्री ब्लॉक भाई)
+// =====================================================================
+TaskManager.defineTask(BACKGROUND_TRACKING_TASK, async ({ data, error }: any) => {
+  if (error) {
+    console.error('❌ [BACKGROUND TASK FATAL]:', error);
+    return;
+  }
+  if (data) {
+    const { locations } = data;
+    if (locations && locations.length > 0) {
+      const { latitude, longitude } = locations[0].coords;
+
+      try {
+        // स्टोरेज से केवल वही एक आईडी निकालो जो अभी एक्टिव है भाई
+        const activeBatchId = await AsyncStorage.getItem('active_tracking_batch_id');
+        
+        if (activeBatchId) {
+          // बैकएंड एपीआई पर बिना किसी 'batches' वेरिएबल के सीधे हिट मारो भाई
+          await api.put('/api/delivery/update-location', { 
+            latitude, 
+            longitude,
+            activeBatchId: Number(activeBatchId)
+          });
+          console.log(`🌌 [BG LIVE TRACKING]: Sent for Batch ${activeBatchId} -> (${latitude}, ${longitude})`);
+        }
+      } catch (err) {
+        console.error('❌ [BG GPS SYNC FAILED]:', err);
+      }
+    }
+  }
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },

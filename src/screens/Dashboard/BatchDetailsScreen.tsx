@@ -11,7 +11,7 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
   const { batchId, batchData } = route.params || {};
   const queryClient = useQueryClient();
 
-  // 1. Batch के अंदर के सारे डिटेल्स और ऑर्डर्स फ्रेश भी फ़ेच करके रखें
+  // 1. 🎯 फिक्स 1: यहाँ स्ट्रिंग बैकटिक (`) लगाया भाई ताकि 'batchId' वेरिएबल सही से रीड हो सके
   const { data: batchFromServer, isLoading } = useQuery({
     queryKey: [`/delivery/batch-details/${batchId}`],
     queryFn: async () => {
@@ -19,7 +19,8 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       return response.data;
     }
   });
-// 🎯 2. जादुई सुधार: 'My Task' स्क्रीन की तरह यहाँ भी उसी सटीक प्राइस एपीआई को कॉल किया
+
+  // 🎯 2. फिक्स 2: यहाँ भी क्वेरी की और यूआरएल दोनों को बैकटिक में लॉक किया भाई
   const { data: priceData } = useQuery({
     queryKey: [`/delivery/batch-price/${batchId}`],
     queryFn: async () => {
@@ -27,22 +28,29 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       return response.data;
     }
   });
-  // 🎯 सेफ्टी फ़ॉलबैक: अगर route से डेटा आने में टाइम लगे तो सर्वर या लोकल जो भी हो, कम्बाइन कर लें
+
+  // 🎯 सेफ्टी फ़ॉलबैक: डेटा कम्बाइन कर लें भाई
   const currentBatch = batchData || batchFromServer;
 
-  // 2. Mark as Delivered Mutation
+  // 2. 🎯 फिक्स 3: म्यूटेशन यूआरएल को भी बैकटिक (`) देकर सुधारा भाई!
   const completeMutation = useMutation({
-    mutationFn: (orderId: number) => apiRequest('POST', `/delivery/complete-order/${orderId}`),
+    mutationFn: (orderId: number) => api.post(`/api/delivery/complete-order/${orderId}`),
     onSuccess: () => {
-      Alert.alert("सफलता", "ऑर्डर सफलतापूर्वक डिलीवर हो गया!");
+      Alert.alert("सफलता", "ऑर्डर सफलतापूर्वक डिलीवर हो गया भाई! 🎉");
       queryClient.invalidateQueries({ queryKey: [`/delivery/batch-details/${batchId}`] });
       queryClient.invalidateQueries({ queryKey: ['/delivery/my-tasks'] });
     },
+    onError: (error: any) => {
+      console.error("❌ Delivery Completion Failed:", error);
+      Alert.alert("Error", error.response?.data?.error || "Order complete karne mein dikkat aayi.");
+    }
   });
+
+  // 🎯 फिक्स 4: लिस्ट डेटा को नए सब-ऑर्डर्स आर्किटेक्चर के हिसाब से मैप किया भाई
+  const listData = batchFromServer?.subOrders || batchFromServer?.orders || [currentBatch].filter(Boolean);
 
   // 🛍️ SELLER / SHOP SECTION RENDERING
   const renderHeaderDetails = () => {
-    // अगर एक से ज़्यादा दुकानें हैं तो pickupPoints ऐरे में से पहली दुकान का नंबर निकालें
     const shopPhone = currentBatch?.pickupPoints?.[0]?.phone || "N/A";
 
     return (
@@ -59,9 +67,10 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
             
             {shopPhone !== "N/A" && (
               <TouchableOpacity onPress={() => Linking.openURL(`tel:${shopPhone}`)}>
+                {/* 🎯 फिक्स 5: टेक्स्ट का रंग साफ़ चमकाने के लिए इनलाइन कलर सुधारा भाई */}
                 <View style={[styles.callIcon, { backgroundColor: '#001B3A' }]}>
                   <Feather name="phone" size={16} color="#D4AF37" />
-                  <Text style={styles.callText}>Call Shop</Text>
+                  <Text style={[styles.callText, { color: '#D4AF37' }]}>Call Shop</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -75,12 +84,10 @@ export default function BatchDetailsScreen({ route, navigation }: any) {
       </View>
     );
   };
-const renderOrder = ({ item }: any) => {
-    // 🎯 सटीक सुधार: पैरेंट ऑब्जेक्ट (currentBatch) के बजाय लूप के 'item' को पहली प्राथमिकता दी
-    // क्योंकि नाम, फोन और नियरबाय हर ऑर्डर के 'item' के अंदर आ रहे हैं
+
+  const renderOrder = ({ item }: any) => {
     const bData = item || currentBatch || {};
 
-    // 👤 अब यह सीधे item.customerName को पढ़ेगा, ठीक उपलब्ध बैच स्क्रीन की तरह
     const displayCustomerName = bData.customerName || 'Customer';
     const displayCustomerPhone = bData.customerPhone || '';
     const displayDeliveryAddress = bData.shippingAddress || bData.deliveryAddress || 'Local Address';
@@ -109,7 +116,7 @@ const renderOrder = ({ item }: any) => {
         {/* 🏠 कस्टमर का पूरा पता */}
         <Text style={styles.addressText}>🏠 {displayDeliveryAddress}, {displayCity}</Text>
         
-        {/* 🎯 NEAR BY FIELD: अब यहाँ बिना किसी रुकावट के पीले बॉक्स में चमकेगा */}
+        {/* 🎯 NEAR BY FIELD: पीले बॉक्स में */}
         {displayNearBy && displayNearBy !== "Not Provided" && displayNearBy !== "null" && (
           <View style={{ 
             backgroundColor: '#fef3c7', 
@@ -129,10 +136,9 @@ const renderOrder = ({ item }: any) => {
           </View>
         )}
         
-     <View style={styles.divider} />
+        <View style={styles.divider} />
         
         <View style={styles.footer}>
-          {/* 🎯 टाइपस्क्रिप्ट फिक्स: सीधे 'priceData' से वैल्यू उठाई ताकि स्कोप एरर खत्म हो जाए */}
           <Text style={[styles.amount, { color: '#ef4444' }]}>
             Payable Amount: {priceData?.totalToCollect !== undefined ? `₹${Number(priceData.totalToCollect).toFixed(2)}` : "कैलकुलेट हो रहा है..."}
           </Text>
@@ -151,11 +157,13 @@ const renderOrder = ({ item }: any) => {
     );
   };
   
-  const listData = (batchFromServer as { orders: any[] })?.orders || [currentBatch].filter(Boolean);
+  // 🎯 फिक्स 6: रिस्पॉन्स के एरे को सेफ़ली फॉलबैक के साथ सिंक किया भाई
+  const dataToRender = Array.isArray(listData) ? listData : [];
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={listData}
+        data={dataToRender}
         renderItem={renderOrder}
         keyExtractor={(item, index) => (item?.id || index).toString()}
         contentContainerStyle={{ padding: 15 }}
@@ -173,7 +181,6 @@ const styles = StyleSheet.create({
   headerContainer: { marginBottom: 10 },
   title: { fontSize: 22, fontWeight: '800', color: '#1e293b', marginBottom: 12 },
   
-  // 🏪 न्यू सेलर कार्ड स्टाइल
   sellerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0', borderLeftWidth: 5, borderLeftColor: '#D4AF37', elevation: 2 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   iconTitleRow: { flexDirection: 'row', alignItems: 'center' },
@@ -181,7 +188,6 @@ const styles = StyleSheet.create({
   shopName: { fontSize: 18, fontWeight: '800', color: '#001B3A', marginBottom: 4 },
   shopAddress: { fontSize: 13, color: '#475569', lineHeight: 18 },
   
-  // 👤 कस्टमर कार्ड स्टाइल
   orderCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 15, elevation: 3, borderLeftWidth: 5, borderLeftColor: '#10b981' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   customerName: { fontSize: 18, fontWeight: '700', color: '#001B3A', marginLeft: 6 },

@@ -5,8 +5,12 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useSocket } from '../../hooks/useSocket';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios'; // या जो भी आपका API क्लाइंट हो
+import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+
+// टास्क का नाम बिल्कुल पुराना वाला ही रहेगा ताकि दोनों स्क्रीन कनेक्ट रहें भाई
+const BACKGROUND_TRACKING_TASK = 'BACKGROUND_GPS_TRACKING_TASK';
  const { width } = Dimensions.get('window');
 export default function MyTasksScreen({ navigation }: any) {
   const queryClient = useQueryClient();
@@ -16,25 +20,57 @@ export default function MyTasksScreen({ navigation }: any) {
 const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [deliveryOtp, setDeliveryOtp] = useState('');
   const [selectedBatchForOtp, setSelectedBatchForOtp] = useState<number | null>(null);
-  // App चालू होते ही एक्टिव जर्नी को रिकवर करें
+ // App चालू होते ही GPS परमिशन मांगें और एक्टिव मल्टी-जर्नी को रिकवर करें
   useEffect(() => {
-    const checkActiveJourney = async () => {
-      const savedBatchId = await AsyncStorage.getItem('activeBatchId');
-      if (savedBatchId) {
-        const bId = parseInt(savedBatchId);
-        setActiveBatchId(bId);
-        startLiveTracking(bId);
+    const initializeApp = async () => {
+      try {
+        // 1. पहले स्क्रीन पर दिखने वाली (Foreground) लोकेशन की परमिशन मांगें
+        const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+        
+        if (foregroundStatus === 'granted') {
+          // 2. अगर वो मिल गई, तब बैकग्राउंड (Allow all the time) की परमिशन मांगें
+          const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+          
+          if (backgroundStatus !== 'granted') {
+            Alert.alert(
+              "बैकग्राउंड लोकेशन ज़रूरी है!",
+              "Zomato की तरह बैकग्राउंड ट्रैकिंग चलाने के लिए कृपया अपने फोन की Settings > Apps > Shopnish Delivery > Permissions > Location में जाएं और उसे 'Allow all the time' (हमेशा अनुमति दें) पर सेट करें भाई।"
+            );
+          }
+        } else {
+          Alert.alert("अनुमति अस्वीकार", "ऐप को सही से चलाने के लिए लोकेशन परमिशन देना ज़रूरी है।");
+        }
+
+       // 🎯 सुधार १: अब यह पुराने 'outForDeliveryAt' के बजाय हमारी नई समझ 'updatedAt' से रिकवरी करेगा
+        const activeBatchesJson = await AsyncStorage.getItem('active_out_for_delivery_batches');
+        if (activeBatchesJson) {
+          const activeBatches = JSON.parse(activeBatchesJson);
+          const now = Date.now();
+          const ONE_HOUR_MS = 60 * 60 * 1000;
+
+          const validBatches = activeBatches.filter((batch: any) => {
+            const baseTime = batch.updatedAt ? new Date(batch.updatedAt).getTime() : now;
+            return (now - baseTime) < ONE_HOUR_MS;
+          });
+
+          if (validBatches.length > 0) {
+            setActiveBatchId(validBatches[validBatches.length - 1].id);
+            if (validBatches.length !== activeBatches.length) {
+              await AsyncStorage.setItem('active_out_for_delivery_batches', JSON.stringify(validBatches));
+            }
+            console.log(`🔄 [RECOVERY]: Recovered ${validBatches.length} active tracking batches.`);
+          } else {
+            await AsyncStorage.removeItem('active_out_for_delivery_batches');
+            await AsyncStorage.removeItem('active_tracking_batch_id');
+            setActiveBatchId(null);
+          }
+        }
+      } catch (err) {
+        console.error("❌ App initialization failed:", err);
       }
     };
-    checkActiveJourney();
-return () => {
-  if (watchIdRef.current !== null) {
-    Geolocation.clearWatch(watchIdRef.current); // 👈 यहाँ भी बदलें
-  }
-};
-   
+    initializeApp();
   }, []);
-
   // 1. बैकएंड से असाइन किए गए एक्टिव बैचेस लेकर आना
   const { data: myTasks } = useQuery({
     queryKey: ['/delivery/my-tasks'],
@@ -45,164 +81,179 @@ return () => {
     refetchInterval: 15000, // हर 15 सेकंड में ऑटो रिफ्रेश
   });
 
-  // 🎯 2. म्यूटेशन: स्टेटस अपडेट करने के लिए (Path & Log Fix)
+  // 🎯 फिक्स 1: मल्टी-वेंडर पिकअप और बैच लेवल स्टेटस को अलग-अलग हैंडल करने वाला सुधरा हुआ म्यूटेशन भाई
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ batchId, status, otp }: { batchId: number, status: string, otp?: string }) => {
-      console.log(`📡 Requesting Status Change: Batch #${batchId} -> ${status}`);
+    mutationFn: async ({ batchId, subOrderId, status, otp }: { batchId: number, subOrderId?: number, status: string, otp?: string }) => {
+      // अगर पिकअप की बात है और हमारे पास subOrderId है, तो विशिष्ट सब-ऑर्डर एंडपॉइंट पर हिट मारो भाई
+      if (status === 'picked_up' && subOrderId) {
+        console.log(`📡 Requesting Sub-Order Pickup: Batch #${batchId} -> SubOrder #${subOrderId}`);
+        const response = await api.patch(`/api/delivery/sub-orders/${subOrderId}/pickup`, { status });
+        return response.data;
+      }
       
-      // 🚨 FIX: अगर आपके Axios instance में /api पहले से जुड़ा है, 
-      // तो यहाँ सिर्फ '/delivery-boys/batches/...' लिखें।
-      // अभी के लिए हम पूरा पाथ साफ़ लिख रहे हैं, अपने Axios config के हिसाब से इसे चेक करें:
+      // बाकी सारे बैच-लेवल स्टेटस (जैसे out_for_delivery, delivered) पुराने रूट पर ही चलेंगे भाई
+      console.log(`📡 Requesting Batch Status Change: Batch #${batchId} -> ${status}`);
       const response = await api.patch(`/api/delivery/batches/${batchId}/status`, { status, otp });
       return response.data;
     },
     onSuccess: (data) => {
-      console.log("✅ Server Status Updated:", data);
-      // डेटाबेस रीफ्रेच करें ताकि बटन 'Confirm Pickup' बन जाए
+      console.log("✅ Server Status Updated Successfully:", data);
       queryClient.invalidateQueries({ queryKey: ['/delivery/my-tasks'] });
     },
     onError: (error: any) => {
-      console.error("❌ Status Update Failed Network Error:", error);
-      
-      // 🛑 यह अलर्ट हमें बताएगा कि API क्यों नहीं मिली (404) या ब्लॉक हुई (401)
+      console.error("❌ Status Update Failed:", error);
       const statusCode = error?.response?.status;
       const errMsg = error?.response?.data?.error || "Server responded with an error.";
       
       Alert.alert(
         `API Error (Status: ${statusCode || 'Unknown'})`,
-        `Path Checked: /api/delivery/batches/status\nReason: ${errMsg}`
+        `Reason: ${errMsg}`
       );
     }
   });
-  // 📡 2. ZOMATO STYLE LIVE TRACKING SENDER (Updated with Library Fix)
-  const startLiveTracking = (batchId: number) => {
-    if (watchIdRef.current !== null) {
-      Geolocation.clearWatch(watchIdRef.current); // 👈 यहाँ बदला
-    }
 
-    // 🚨 FIX: navigator.geolocation की जगह अब 'Geolocation' यूज़ होगा
-    watchIdRef.current = Geolocation.watchPosition(
-      async (position) => {
-        const { latitude, longitude, heading } = position.coords;
-
-        // A. कस्टमर के लिए सॉकेट पर लाइव ब्रॉडकास्ट
-        if (socket && socket.connected) {
-          console.log(`🚀 Sending Bike Live Location: Lat ${latitude}, Lng ${longitude}`);
-          socket.emit('delivery:location-update', {
-            batchId,
-            latitude,
-            longitude,
-            heading: heading || 0
-          });
-        }
-
-        // B. आपके बैकएंड की /update-location API पर जीपीएस डेटाबेस सिंक
-        try {
-          await api.put('/api/delivery/update-location', { latitude, longitude });
-        } catch (err) {
-          console.log("GPS DB Sync Error:", err);
-        }
-      },
-      (error) => console.error("🚨 Live GPS Error:", error),
-      {
-        enableHighAccuracy: true, 
-        distanceFilter: 1,        
-        maximumAge: 0
-      } as any 
-    );
-  };
-// 🚀 4. ACTION: जर्नी शुरू करना (Map Open + Background Sync Fix)
-  const handleStartJourney = async (batch: any, targetType: 'shop' | 'customer') => {
+ // 📡 START LIVE TRACKING (मल्टी-बैच और 'updatedAt' सपोर्ट के साथ)
+  const startLiveTracking = async (batchId: number) => {
     try {
-      const nextStatus = targetType === 'shop' ? 'ready_for_pickup' : 'out_for_delivery';
+      const activeBatchesJson = await AsyncStorage.getItem('active_out_for_delivery_batches');
+      let activeBatches = activeBatchesJson ? JSON.parse(activeBatchesJson) : [];
 
-      // 1. UI Status aur Local Storage ko turant set karo taaki button change ho jaye
-      setActiveBatchId(batch.id);
-      await AsyncStorage.setItem('activeBatchId', batch.id.toString());
-      
-      // 2. Live Tracking loop start karo
-      startLiveTracking(batch.id);
+      const batchIndex = activeBatches.findIndex((b: any) => b.id === batchId);
+      const batchData = {
+        id: batchId,
+        status: 'picked_up',
+        updatedAt: new Date().toISOString() // 🎯 सुधार २: TaskManager के लिए फ्रेश आईएसओ टाइमस्टैम्प
+      };
 
-      // 3. Dynamic Map URL banao (Coordinates check ke sath)
-      const targetLat = targetType === 'shop' ? batch.pickupPoints?.[0]?.latitude : batch.deliveryLat;
-      const targetLng = targetType === 'shop' ? batch.pickupPoints?.[0]?.longitude : batch.deliveryLng;
-
-      let url = "";
-      if (targetLat && targetLng) {
-        // Standard geo URL format jo har phone ke maps application ko support karta hai
-        url = `geo:${targetLat},${targetLng}?q=${targetLat},${targetLng}(Target)`;
+      if (batchIndex > -1) {
+        activeBatches[batchIndex] = batchData;
       } else {
-        const cleanAddress = encodeURIComponent(targetType === 'shop' ? batch.pickupAddresses : (batch.deliveryAddress || "Bundi"));
-        url = `https://www.google.com/maps/dir/?api=1&destination=${cleanAddress}`;
+        activeBatches.push(batchData);
       }
 
-      // 4. Map ko sabse pehle open karo (Bina wait kiye taaki delivery boy ruke nahi)
-      console.log("🗺️ Attempting to open map URL:", url);
-      const canOpen = await Linking.canOpenURL(url);
-      
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        // Fallback url agar geo: direct support na kare
-        const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${targetLat || 25.44},${targetLng || 75.66}`;
-        await Linking.openURL(fallbackUrl);
-      }
+      await AsyncStorage.setItem('active_out_for_delivery_batches', JSON.stringify(activeBatches));
+      await AsyncStorage.setItem('active_tracking_batch_id', String(batchId));
 
-      // 5. Background mein backend status update call chala do (Fire and forget safely)
-      updateStatusMutation.mutate({ batchId: batch.id, status: nextStatus });
-
+      await Location.startLocationUpdatesAsync(BACKGROUND_TRACKING_TASK, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 5000,
+        distanceInterval: 10,
+        deferredUpdatesInterval: 5000,
+        foregroundService: {
+          notificationTitle: "Shipnish Delivery Active",
+          notificationBody: `En route to customer (Tracking ${activeBatches.length} active deliveries)...`,
+          notificationColor: "#001B3A"
+        }
+      });
+      console.log(`🚀 [BG GPS]: Tracking activated for Batch #${batchId}.`);
     } catch (err) {
-      console.error("🚨 Journey Start Failed completely:", err);
-      Alert.alert("Error", "Safar shuru karne mein koi dikkat aayi hai.");
+      console.error("❌ Background tracking start failed:", err);
     }
   };
-  
-  // 🛍️ 5. एक्शन: दुकान से पिकअप कन्फर्म करना
+  // 🛑 2. STOP LIVE TRACKING (सिर्फ़ डिलीवर हुए बैच को लिस्ट से हटाएगा भाई)
+  const stopLiveTracking = async (batchId: number, reason: string) => {
+    try {
+      // एक्टिव बैचेस की लिस्ट निकालो
+      const activeBatchesJson = await AsyncStorage.getItem('active_out_for_delivery_batches');
+      
+      if (activeBatchesJson) {
+        let activeBatches = JSON.parse(activeBatchesJson);
+
+        // 🎯 जादू यहाँ है: सिर्फ़ उस बैच को लिस्ट से हटाओ जो डिलीवर हुआ है, बाकी चलते रहेंगे!
+        const remainingBatches = activeBatches.filter((b: any) => b.id !== batchId);
+
+        if (remainingBatches.length > 0) {
+          // अगर अभी भी कुछ बैचेस का रास्ता बचा है, तो बची हुई लिस्ट को सेव करो
+          await AsyncStorage.setItem('active_out_for_delivery_batches', JSON.stringify(remainingBatches));
+          console.log(`ℹ️ [BG GPS]: Batch #${batchId} removed. ${remainingBatches.length} batches still tracking. Reason: ${reason}`);
+        } else {
+          // 🛑 अगर सारे बैचेस डिलीवर हो चुके हैं, तो फोन के जीपीएस इंजन को पूरी तरह बंद कर दो भाई!
+          const isTaskRunning = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TRACKING_TASK);
+          if (isTaskRunning) {
+            await Location.stopLocationUpdatesAsync(BACKGROUND_TRACKING_TASK);
+          }
+          await AsyncStorage.removeItem('active_out_for_delivery_batches');
+          await AsyncStorage.removeItem('active_tracking_batch_id');
+          console.log(`🛑 [BG GPS]: All batches clear. Stopped background engine. Reason: ${reason}`);
+        }
+      }
+    } catch (err) {
+      console.error("❌ Background tracking stop failed:", err);
+    }
+  };
+ // 🛍️ ४. एक्शन: दुकान से पिकअप कन्फर्म करना (सर्वर -> picked_up)
   const handleConfirmPickup = async (batchId: number) => {
     Alert.alert("Confirm Pickup", "क्या आपने वेंडर से सारे आइटम्स ले लिए हैं?", [
       { text: "नहीं", style: "cancel" },
       {
         text: "हाँ, ले लिए",
         onPress: async () => {
-          // वेंडर का काम खत्म, लोकल ट्रैकिंग थोड़ी देर रोको जब तक नया सफर शुरू न हो
-         if (watchIdRef.current !== null) {
-  Geolocation.clearWatch(watchIdRef.current); // 👈 यहाँ भी बदलें
-  watchIdRef.current = null;
-}
-          await AsyncStorage.removeItem('activeBatchId');
-          setActiveBatchId(null);
-
-          // बैकएंड को बताओ माल उठ चुका है -> 'picked_up'
-          updateStatusMutation.mutate({ batchId, status: 'picked_up' });
+          console.log(`📦 Pickup Confirmed for Batch #${batchId}. Setting status to picked_up...`);
+          
+          updateStatusMutation.mutate(
+            { batchId, status: 'picked_up' },
+            {
+              onSuccess: async () => {
+                // 🎯 सुधार ३: सर्वर सक्सेस होने पर ट्रैकिंग इंजन और लोकल स्टोरेज दोनों सिंक होंगे भाई
+                await startLiveTracking(batchId);
+                setActiveBatchId(batchId);
+              }
+            }
+          );
         }
       }
     ]);
+  };// 🚀 ५. नया एक्शन: रास्ते में निकलने का बटन दबाना (सर्ver -> out_for_delivery)
+  const handleStartJourney = async (batchId: number) => {
+    console.log(`🚀 Starting Journey for Batch #${batchId}. Setting status to out_for_delivery...`);
+    
+    updateStatusMutation.mutate(
+      { batchId, status: 'out_for_delivery' },
+      {
+        onSuccess: async () => {
+          try {
+            // 🎯 सुधार ४: जर्नी स्टार्ट होते ही लोकल स्टोरेज का टाइमस्टैम्प फिर से रीसेट (Fresh 60 Mins)
+            const activeBatchesJson = await AsyncStorage.getItem('active_out_for_delivery_batches');
+            if (activeBatchesJson) {
+              let activeBatches = JSON.parse(activeBatchesJson);
+              const batchIndex = activeBatches.findIndex((b: any) => b.id === batchId);
+
+              if (batchIndex > -1) {
+                activeBatches[batchIndex].status = 'out_for_delivery';
+                activeBatches[batchIndex].updatedAt = new Date().toISOString(); // टाइमर रीसेट भाई!
+                await AsyncStorage.setItem('active_out_for_delivery_batches', JSON.stringify(activeBatches));
+              }
+            }
+          } catch (e) {
+            console.error("❌ AsyncStorage re-sync failed:", e);
+          }
+          setActiveBatchId(batchId);
+        }
+      }
+    );
   };
 
-  // 🏁 6. एक्शन: कस्टमर को डिलीवरी देना (OTP वेरिफिकेशन के साथ)
-// 1. नई म्यूटेशन जोड़ें जो OTP भेजेगी
-const sendOtpMutation = useMutation({
-  mutationFn: async (batchId: number) => {
-    return await api.post(`/api/delivery/batches/${batchId}/send-otp`);
-  },
-  onSuccess: (data) => {
-    console.log("✅ OTP API Triggered successfully");
-    // अब इसके बाद OTP मोडल दिखाएं
-    setOtpModalVisible(true);
-  },
-  onError: (error: any) => {
-    Alert.alert("Error", "OTP भेजने में दिक्कत आई: " + error.message);
-  }
-});
+  // 🏁 5. एक्शन: कस्टमर को डिलीवरी देना (OTP वेरिफिकेशन के साथ)
+  const sendOtpMutation = useMutation({
+    mutationFn: async (batchId: number) => {
+      return await api.post(`/api/delivery/batches/${batchId}/send-otp`);
+    },
+    onSuccess: () => {
+      console.log("✅ OTP API Triggered successfully");
+      setOtpModalVisible(true);
+    },
+    onError: (error: any) => {
+      Alert.alert("Error", "OTP भेजने में दिक्कत आई: " + error.message);
+    }
+  });
 
-// 2. अपना 'Confirm Delivery' बटन फंक्शन अपडेट करें
-const handleConfirmDelivery = (batchId: number) => {
-  setSelectedBatchForOtp(batchId);
-  // मोडल खोलने से पहले API हिट करें ताकि डेटाबेस में OTP जनरेट हो जाए
-  sendOtpMutation.mutate(batchId);
-};
+  const handleConfirmDelivery = (batchId: number) => {
+    setSelectedBatchForOtp(batchId);
+    sendOtpMutation.mutate(batchId);
+  };
 
-  // ओटीपी सबमिट करने का फाइनल लॉजिक
+  // ओटीपी सबमिट करने का फाइनल लॉजिक (GPS STOP ON DELIVERED)
+ // ओटीपी सबमिट करने का फाइनल लॉजिक (GPS STOP ON DELIVERED)
   const submitDeliveryOtp = () => {
     if (!deliveryOtp || deliveryOtp.length < 4) {
       Alert.alert("त्रुटि", "कृपया सही OTP दर्ज करें!");
@@ -211,28 +262,23 @@ const handleConfirmDelivery = (batchId: number) => {
 
     if (!selectedBatchForOtp) return;
 
-    // मोडल बंद करो
     setOtpModalVisible(false);
 
-    // बैकएंड को डिलीवर स्टेटस और ओटीपी भेजो
     updateStatusMutation.mutate(
       { batchId: selectedBatchForOtp, status: 'delivered', otp: deliveryOtp },
       {
         onSuccess: async () => {
-          if (watchIdRef.current !== null) {
-            Geolocation.clearWatch(watchIdRef.current);
-            watchIdRef.current = null;
-          }
-          await AsyncStorage.removeItem('activeBatchId');
+          // 🎯 फिक्स: यहाँ ब्रैकेट को सही से बंद किया है और 'BATCH_DELIVERED' रीज़न पास किया है भाई
+          await stopLiveTracking(selectedBatchForOtp!, 'BATCH_DELIVERED');
+
           setActiveBatchId(null);
+          setDeliveryOtp('');
           Alert.alert("सफलता", "ऑर्डर सफलतापूर्वक डिलीवर हो गया है! 🎉");
         }
       }
     );
   };
-
-
-const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPickup, handleStartJourneyCustomer, handleConfirmDelivery, navigation }: any) => {
+const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPickup, handleConfirmDelivery, navigation }: any) => {
   const [totalToCollect, setTotalToCollect] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState<boolean>(true);
 
@@ -241,34 +287,37 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
 
   // 🎯 जादू यहाँ है: स्क्रीन पर कार्ड आते ही यह आपकी नई सटीक एपीआई को कॉल करेगा
  // 🎯 आपके कस्टमाइज्ड api इंस्टेंस के साथ सुधरा हुआ इफेक्ट
+ // 🎯 फिक्स 2: कस्टमाइज्ड api इंस्टेंस और सेफ़ क्लीन-अप के साथ सुधरा हुआ प्राइज लोडर भाई
   useEffect(() => {
+    let isMounted = true;
+
     const fetchBatchPrice = async () => {
       try {
         setLoadingPrice(true);
-        
-        // 💡 मुख्य बदलाव: 'axios.get' की जगह आपके इम्पोर्टेड 'api.get' का उपयोग किया है
-        // आपके एक्सप्रेस राउटर के बेस पाथ के अनुसार रूट सेट करें
         const response = await api.get(`/api/delivery/batch-price/${item.id}`); 
         
-        // 💡 सुरक्षा जांच: अगर आपके रूट का बेस पाथ सिर्फ '/api' है, 
-        // तो ऊपर वाली लाइन को बदलकर यह कर दें: const response = await api.get(`/batch-price/${item.id}`);
-
-        if (response.data && response.data.totalToCollect !== undefined) {
-          setTotalToCollect(Number(response.data.totalToCollect));
-        } else {
-          setTotalToCollect(0);
+        if (isMounted) {
+          if (response.data && response.data.totalToCollect !== undefined) {
+            setTotalToCollect(Number(response.data.totalToCollect));
+          } else {
+            setTotalToCollect(0);
+          }
         }
       } catch (error: any) {
-        // एरर की पूरी डिटेल देखने के लिए
         console.log(`❌ Price API Fail for batch ${item.id}:`, error.message);
-        setTotalToCollect(0); 
+        if (isMounted) setTotalToCollect(0); 
       } finally {
-        setLoadingPrice(false);
+        if (isMounted) setLoadingPrice(false);
       }
     };
 
     fetchBatchPrice();
-  }, [item.id]);
+
+    // मेमोरी लीक रोकने के लिए क्लीन-अप फंक्शन भाई
+    return () => {
+      isMounted = false;
+    };
+  }, [item.id, api]); // 🎯 यहाँ 'api' को डिपेंडेंसी में लॉक कर दिया ताकि लाइव ट्रैकिंग स्मूथ रहे भाई
 
   return (
     <View style={styles.card}>
@@ -320,79 +369,92 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
           borderWidth: 1,
           borderColor: '#D4AF37'
         }}
-        onPress={() => navigation.navigate('BatchDetails', { batchId: item.id, batchData: item })}
+        onPress={() =>navigation.navigate('BatchDetails', { batchId: item.id, batchData: item  })}
       >
         <Feather name="eye" size={16} color="#D4AF37" style={{ marginRight: 6 }} />
         <Text style={{ color: '#D4AF37', fontWeight: 'bold', fontSize: 14 }}>View Orders (कस्टमर जानकारी)</Text>
       </TouchableOpacity>
       <View style={styles.divider} />
       
-      {/* 🔘 ऐक्शन्स बटन्स */}
-      <View style={styles.actionRow}>
-        {currentStatus === 'assigned' && (
-          <TouchableOpacity style={styles.mapBtn} onPress={() => handleStartJourney(item, 'shop')}>
-            <Feather name="navigation" size={18} color="#001B3A" />
-            <Text style={styles.btnText}>Start Journey (To Shop)</Text>
-          </TouchableOpacity>
-        )}
-        {currentStatus === 'ready_for_pickup' && (
-          <TouchableOpacity style={[styles.mapBtn, { backgroundColor: '#10b981' }]} onPress={() => handleConfirmPickup(item.id)}>
-            <Feather name="check-square" size={18} color="#fff" />
-            <Text style={[styles.btnText, { color: '#fff' }]}>Confirm Pickup</Text>
-          </TouchableOpacity>
-        )}
-        {currentStatus === 'picked_up' && (
-          <TouchableOpacity style={[styles.mapBtn, { backgroundColor: '#7c3aed' }]} onPress={() => handleStartJourney(item, 'customer')}>
-            <Feather name="truck" size={18} color="#fff" />
-            <Text style={[styles.btnText, { color: '#fff' }]}>Start Journey (To Customer)</Text>
-          </TouchableOpacity>
-        )}
-        {currentStatus === 'out_for_delivery' && (
-          <TouchableOpacity style={[styles.mapBtn, { backgroundColor: '#0284c7' }]} onPress={() => handleConfirmDelivery(item.id)}>
-            <Feather name="home" size={18} color="#fff" />
-            <Text style={[styles.btnText, { color: '#fff' }]}>Confirm Delivery (Enter OTP)</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      {isJourneyActive && (
-        <View style={styles.liveIndicator}>
-          <View style={styles.redDot} />
-          <Text style={styles.liveText}>Live Tracking Active</Text>
-        </View>
-      )}
+  {/* 🔘 ऐक्शन्स बटन्स */}
+{/* 🎯 फिक्स 1: केस-इन्सेंसिटिव स्टेटस चेकिंग के साथ सुधरा हुआ ऐक्शन बटन्स ब्लॉक भाई */}
+  <View style={styles.actionRow}>
+    {/* स्टेप 1: जब बैच सिर्फ असाइन हुआ हो, तब दुकान से सामान पिकअप करने का बटन दिखेगा भाई */}
+    {item.status?.toLowerCase() === 'assigned' && (
+      <TouchableOpacity 
+        style={[styles.mapBtn, { backgroundColor: '#10b981', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
+        onPress={() => handleConfirmPickup(item.id)}
+      >
+        <Feather name="check-square" size={18} color="#fff" />
+        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Confirm Pickup</Text>
+      </TouchableOpacity>
+    )}
+
+    {/* स्टेप 2: सामान पिकअप हो चुका है, अब राइडर जर्नी स्टार्ट करने के लिए बटन दबाएगा */}
+    {item.status?.toLowerCase() === 'picked_up' && (
+      <TouchableOpacity 
+        style={[styles.mapBtn, { backgroundColor: '#f59e0b', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
+        onPress={() => handleStartJourney(item.id)}
+      >
+        <Feather name="navigation" size={18} color="#fff" />
+        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Start Journey (Out for Delivery)</Text>
+      </TouchableOpacity>
+    )}
+
+    {/* स्टेप 3: जब राइडर रास्ते में हो, तब कस्टमर के घर पहुँचकर OTP डालने का बटन दिखेगा */}
+    {item.status?.toLowerCase() === 'out_for_delivery' && (
+      <TouchableOpacity 
+        style={[styles.mapBtn, { backgroundColor: '#0284c7', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
+        onPress={() => handleConfirmDelivery(item.id)}
+      >
+        <Feather name="home" size={18} color="#fff" />
+        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Confirm Delivery (Enter OTP)</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+
+{/* 🎯 लाइव इंडिकेटर: सामान पिकअप होने से लेकर डिलीवर होने तक (दोनों स्टेट्स में) लाइव ट्रैकिंग का रेड डॉट चमकेगा भाई */}
+{(currentStatus === 'picked_up' || currentStatus === 'out_for_delivery') && (
+  <View style={styles.liveIndicator}>
+    <View style={styles.redDot} />
+    <Text style={styles.liveText}>Live Tracking Active (60 Min Max)</Text>
+  </View>
+)}
     </View>
   );
-};
-   const renderTask = ({ item }: any) => {
+}
+// 🎯 फिक्स 2: क्रैश रोकने के लिए 'handleStartJourney' को सफलतापूर्वक यहाँ पास कर दिया भाई!
+const renderTask = ({ item }: any) => {
   return (
     <TaskCardItem 
       item={item}
       activeBatchId={activeBatchId}
-      handleStartJourney={handleStartJourney}
       handleConfirmPickup={handleConfirmPickup}
+      handleStartJourney={handleStartJourney} // 👈 यह मिसिंग था भाई, अब बिल्कुल सेफ़ है!
       handleConfirmDelivery={handleConfirmDelivery}
       navigation={navigation}
     />
   );
 };
-        
-         return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Active Tasks</Text>
-        <Text style={styles.socketStatus}>
-          {isConnected ? "🟢 Server Connected" : "🔴 Reconnecting..."}
-        </Text>
-      </View>
 
-      <FlatList
-        data={myTasks as any[]}
-        renderItem={renderTask}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={<Text style={styles.empty}>Abhi aapne koi batch claim nahi kiya hai.</Text>}
-      />
-     {/* 🎯 CUSTOM OTP MODAL WITH SIMPLE BYPASS SYSTEM (100% FIXED) */}
+return (
+  <View style={styles.container}>
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Active Tasks</Text>
+      <Text style={styles.socketStatus}>
+        {isConnected ? "🟢 Server Connected" : "🔴 Reconnecting..."}
+      </Text>
+    </View>
+
+    <FlatList
+      data={myTasks as any[]}
+      renderItem={renderTask}
+      keyExtractor={(item) => item.id.toString()}
+      contentContainerStyle={{ padding: 15 }}
+      ListEmptyComponent={<Text style={styles.empty}>Abhi aapne koi batch claim nahi kiya hai.</Text>}
+    />
+
+    {/* 🎯 CUSTOM OTP MODAL WITH SIMPLE BYPASS SYSTEM (100% FIXED) */}
     <Modal
       animationType="slide"
       transparent={true}
@@ -430,7 +492,7 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
             </TouchableOpacity>
           </View>
 
-          {/* 🎯 FIRE BYPASS BUTTON: बिना फोटो के सीधे सिंपल डिलीवरी */}
+          {/* 🎯 FIRE BYPASS BUTTON: बिना ओटीपी के सीधे डिलीवरी */}
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 15 }} />
           
           <TouchableOpacity 
@@ -446,7 +508,6 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
                     onPress: () => {
                       setOtpModalVisible(false);
                       
-                      // बैकएंड को सीधा बाईपास कोड हिट करा देंगे
                       updateStatusMutation.mutate(
                         { 
                           batchId: selectedBatchForOtp!, 
@@ -455,13 +516,11 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
                         },
                         {
                           onSuccess: async () => {
-                            if (watchIdRef.current !== null) {
-                              Geolocation.clearWatch(watchIdRef.current);
-                              watchIdRef.current = null;
-                            }
-                            await AsyncStorage.removeItem('activeBatchId');
+                            // 🔥 FIX: बाईपास से डिलीवर होने पर भी बैकग्राउंड जीपीएस को तुरंत बंद करो भाई!
+                         await stopLiveTracking(selectedBatchForOtp!, 'BYPASS_DELIVERED');
                             setActiveBatchId(null);
-                            Alert.alert("सफलता", "ऑर्डर बिना OTP के सीधे डिलीवर मार्क कर दिया गया है।");
+                            setDeliveryOtp('');
+                            Alert.alert("सफलता", "ऑर्डर बिना OTP के सीधे डिलीवर मार्क कर दिया गया है। 🎉");
                           }
                         }
                       );
@@ -479,10 +538,9 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
         </View>
       </View>
     </Modal>
-    </View>
-  );
+  </View>
+);
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
   header: { padding: 25, backgroundColor: '#001B3A', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
@@ -577,4 +635,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+});
+TaskManager.defineTask(BACKGROUND_TRACKING_TASK, async ({ data, error }: any) => {
+  if (error) {
+    console.error('❌ [BACKGROUND TASK FATAL]:', error);
+    return;
+  }
+  
+  if (data) {
+    const { locations } = data;
+    if (locations && locations.length > 0) {
+      const { latitude, longitude } = locations[0].coords;
+
+      try {
+        const activeBatchesJson = await AsyncStorage.getItem('active_out_for_delivery_batches');
+        
+        // 🎯 सुधार: अगर स्टोरेज में कोई डेटा नहीं है, तो बार-बार लॉग प्रिंट करने के बजाय चुपचाप यहीं इंजन बंद कर दो भाई
+        if (!activeBatchesJson) {
+          const isTaskRunning = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TRACKING_TASK);
+          if (isTaskRunning) {
+            await Location.stopLocationUpdatesAsync(BACKGROUND_TRACKING_TASK);
+          }
+          return; // यहीं से बाहर निकल जाओ, फालतू लॉग नहीं आएगा!
+        }
+
+       let activeBatches = JSON.parse(activeBatchesJson);
+        const now = Date.now();
+        const ONE_HOUR_MS = 60 * 60 * 1000;
+
+        const validBatchIds: number[] = [];
+        const remainingBatches = activeBatches.filter((batch: any) => {
+          
+          // 🎯 फिक्स: किसी स्पेसिफिक स्टेटस के टाइमस्टैम्प के बजाय 'updatedAt' या 'timestamp' का इस्तेमाल करें
+          // जब मोबाइल ऐप में बैच स्टोर करें, तो उसमें 'updatedAt' ज़रूर डालें भाई
+          const baseTime = batch.updatedAt ? new Date(batch.updatedAt).getTime() : now;
+          const timeElapsed = now - baseTime;
+          
+          // 🎯 अब यह 'picked_up' और 'out_for_delivery' दोनों को बिना किसी NaN एरर के पूरे 1 घंटे तक ट्रैक करेगा!
+          if (timeElapsed < ONE_HOUR_MS) {
+            validBatchIds.push(batch.id);
+            return true;
+          }
+          return false;
+        });
+        if (remainingBatches.length !== activeBatches.length) {
+          await AsyncStorage.setItem('active_out_for_delivery_batches', JSON.stringify(remainingBatches));
+        }
+
+        if (validBatchIds.length > 0) {
+          await api.put('/api/delivery/update-location', { 
+            latitude, 
+            longitude,
+            activeBatchIds: validBatchIds 
+          });
+          console.log(`📌 [BG GPS SYNC]: Sent location for active batches [${validBatchIds.join(', ')}]`);
+        } else {
+          // 🎯 सुधार: अगर कोई वैलिड बैच नहीं बचा, तो बैकएंड को खाली एरे देकर जीपीएस बंद कर दो भाई
+          try {
+            await api.put('/api/delivery/update-location', { latitude, longitude, activeBatchIds: [] });
+          } catch (e) {}
+
+          const isTaskRunning = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TRACKING_TASK);
+          if (isTaskRunning) {
+            await Location.stopLocationUpdatesAsync(BACKGROUND_TRACKING_TASK);
+          }
+        }
+
+      } catch (err) {
+        console.error('❌ [BG GPS SYNC FAILED]:', err);
+      }
+    }
+  }
 });

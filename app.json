@@ -28,7 +28,10 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION", 
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS", 
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED"
       ]
@@ -41,7 +44,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Shopnish Delivery to access your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow Shopnish Delivery to access your location.",
+          "isAndroidBackgroundLocationEnabled": true 
         }
       ]
     ],
