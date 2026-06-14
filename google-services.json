@@ -62,11 +62,139 @@
           }
         },
         {
+          "client_id": "352463214204-qbd19eid5nv3uuevkqnhdib26isuu9dq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.customer",
+            "certificate_hash": "a7267eb2ce07577292afade28f6bbd9f8cf47e65"
+          }
+        },
+        {
           "client_id": "352463214204-qm3ku5kpk37qe7ntv1m6eohlssub0398.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.shopnish.customer",
             "certificate_hash": "b9b27d696f867e80db8ec648f6c35b3a4ebd7947"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:e82b1195e73f52b51fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.customer.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-f2jat7j9skff0ko0m28t7l4oabnq3un2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.customer.debug",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:b47569885d2da5471fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.customer.testing"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-rl5752ne1cmv1chkorr0o6fkfv23940l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.customer.testing",
+            "certificate_hash": "a7267eb2ce07577292afade28f6bbd9f8cf47e65"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:7b1ef8c9c8d29aee1fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.customer.testing.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-5atf43f8ggn6fugmoqv0sl5lb8e0u14u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.customer.testing.debug",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
           }
         },
         {
@@ -191,6 +319,78 @@
     },
     {
       "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:f1b81d6930040fdf1fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.delivery.testing"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-tqqds83nqe4k7e7vvdffj8hsft8fhfm0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.delivery.testing",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:84575fbe23da3b391fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.delivery.testing.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:352463214204:android:baac66b2717b5fe01fdbf9",
         "android_client_info": {
           "package_name": "com.shopnish.seller"
@@ -198,10 +398,138 @@
       },
       "oauth_client": [
         {
+          "client_id": "352463214204-29mn99h17ep9hcjk8ggah93mmdd4ioh9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.seller",
+            "certificate_hash": "a7267eb2ce07577292afade28f6bbd9f8cf47e65"
+          }
+        },
+        {
           "client_id": "352463214204-79lacjclsc8g37fmbp3q69rtec0gsgii.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.shopnish.seller",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:abb7c1f19ed5ba1d1fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.seller.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-1dpgv4jp1pjvib2o3l683l0kj0jvs6ui.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.seller.debug",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:8ea0a7ffcba021061fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.seller.testing"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-k4o77bn2e64t0uu3qpv9m95tear7ovba.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.seller.testing",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        },
+        {
+          "current_key": "AIzaSyD4G0AfOt0YPc9d0NwAyo1l_t51qra6xxw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:90328815d039169f1fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.seller.testing.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-asjr11fej8r9te2qab377038ljnupa47.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.seller.testing.debug",
             "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
           }
         },

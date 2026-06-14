@@ -1,8 +1,15 @@
 import axios from "axios"; // 🎯 फिक्स 1: 'mport' की स्पेलिंग को सुधार कर 'import' किया भाई
 import { getAuth } from "@react-native-firebase/auth";
 
+// 🎯 जादुई कवच: अगर ऐप डिबग/टेस्टिंग मोड में चल रहा है तो true रहेगा भाई!
+const isDevelopment = __DEV__;
+
+const baseURL = isDevelopment
+  ? "http://66.116.235.235:5001"   // 👉 लैपटॉप या फोन पर टेस्ट करते समय अपने आप पोर्ट 5001 पकड़ेगा (Testing DB)
+  : "https://api.shopnish.com";   // 👉 लाइव प्लेस्टोर वाले असली ग्राहकों के फोन में अपने आप मेन डोमेन पर रहेगा (Main Prod DB)
+
 const api = axios.create({
-  baseURL: "https://api.shopnish.com", 
+  baseURL: baseURL, // 🔥 अब यह डिब्बा पूरी तरह डायनेमिक हो गया भाई साहब!
   timeout: 15000, 
   headers: {
     "Content-Type": "application/json",
