@@ -16,7 +16,8 @@ import BatchDetailsScreen from '../screens/Dashboard/BatchDetailsScreen';
 import DeliveryTrackingScreen from '../screens/Dashboard/DeliveryTrackingScreen';
 import RegistrationScreen from '../screens/RegistrationScreen';
 import { createNavigationContainerRef } from '@react-navigation/native';
-
+import ReturnPickupRequestsScreen from "../screens/ReturnPickupRequestsScreen";
+import PickupReturnScreen from '../screens/PickupReturnScreen';
 // 🚨 Is ref ko export kar rahe hain taaki App.tsx ise use kar sake
 export const navigationRef = createNavigationContainerRef();
 const Stack = createStackNavigator();
@@ -58,6 +59,7 @@ const DeliveryTabs = () => {
           let iconName: string = 'list';
           if (route.name === 'Available') iconName = 'search';
           else if (route.name === 'My Tasks') iconName = 'truck';
+          else if (route.name === 'Returns') iconName = 'rotate-ccw';
           else if (route.name === 'Profile') iconName = 'user';
           
           return <Feather name={iconName} size={size} color={color} />;
@@ -70,7 +72,9 @@ const DeliveryTabs = () => {
     >
       <Tab.Screen name="Available" component={AvailableBatchesScreen} />
       <Tab.Screen name="My Tasks" component={MyTasksScreen} />
+      <Tab.Screen name="Returns" component={ReturnPickupRequestsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+
     </Tab.Navigator>
   );
 }
@@ -115,6 +119,10 @@ export default function AppNavigator() {
                 component={DeliveryTrackingScreen} 
                 options={{ headerShown: false }} 
               />
+              <Stack.Screen
+  name="PickupReturn"
+  component={PickupReturnScreen}
+/>
             </>
           )}
         </>
