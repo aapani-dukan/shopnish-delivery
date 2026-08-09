@@ -13,22 +13,19 @@ import {
 import { useQuery, useQueryClient,useMutation } from "@tanstack/react-query";
 import {apiRequest} from "../services/queryClient";
 import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 export default function ReturnPickupRequestsScreen({ navigation }: any) {
-
-  const { data, isLoading } = useQuery<any>({
-    queryKey: ["/api/returns/delivery"],
-  });
-
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
 const { user } = useAuth();
 
 const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["/api/returns/delivery"],
+  
+queryFn: async () => {
+      const response = await api.get("/api/returns/delivery");
+      return response.data;
+    },
+  });
   const requests = data?.data || [];
 const assignMutation = useMutation({
 
@@ -69,11 +66,18 @@ const assignMutation = useMutation({
   }
 
 });
+if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
   return (
     <FlatList
       data={requests}
       keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ padding: 12 }}
+      contentContainerStyle={{ padding: 48, paddingBottom: 100,  }}
       ListEmptyComponent={() => (
         <View style={styles.center}>
           <Text>No Pickup Requests</Text>
@@ -246,9 +250,12 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
     borderRadius: 10,
-    padding: 12,
+    padding: 24,
     marginBottom: 12,
     elevation: 3,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 18,
+    
   },
 
   image: {
@@ -266,7 +273,7 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 15,
     backgroundColor: "#16a34a",
-    padding: 12,
+    padding: 20,
     borderRadius: 8,
     alignItems: "center",
   },
