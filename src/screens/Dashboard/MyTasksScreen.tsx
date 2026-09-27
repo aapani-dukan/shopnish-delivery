@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, Alert,Modal, TextInput,Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, Alert,Modal, TextInput,Dimensions, RefreshControl, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSocket } from '../../hooks/useSocket';
@@ -14,6 +14,21 @@ const BACKGROUND_TRACKING_TASK = 'BACKGROUND_GPS_TRACKING_TASK';
  const { width } = Dimensions.get('window');
 export default function MyTasksScreen({ navigation }: any) {
   const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+const handleRefresh = async () => {
+  try {
+    setIsRefreshing(true);
+
+    await queryClient.invalidateQueries({
+      queryKey: ['/delivery/my-tasks'],
+    });
+  } catch (error) {
+    console.error('My Tasks Refresh Error:', error);
+  } finally {
+    setIsRefreshing(false);
+  }
+};
   const { isConnected, socket } = useSocket();
   const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -278,7 +293,7 @@ const [otpModalVisible, setOtpModalVisible] = useState(false);
       }
     );
   };
-const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPickup, handleConfirmDelivery, navigation }: any) => {
+const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPickup, handleConfirmDelivery, navigation,isStatusUpdating }: any) => {
   const [totalToCollect, setTotalToCollect] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState<boolean>(true);
 
@@ -381,36 +396,126 @@ const TaskCardItem = ({ item, activeBatchId, handleStartJourney, handleConfirmPi
   <View style={styles.actionRow}>
     {/* स्टेप 1: जब बैच सिर्फ असाइन हुआ हो, तब दुकान से सामान पिकअप करने का बटन दिखेगा भाई */}
     {item.status?.toLowerCase() === 'assigned' && (
-      <TouchableOpacity 
-        style={[styles.mapBtn, { backgroundColor: '#10b981', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
-        onPress={() => handleConfirmPickup(item.id)}
+     <TouchableOpacity 
+  style={[
+    styles.mapBtn,
+    {
+      backgroundColor: '#10b981',
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 10,
+      opacity: isStatusUpdating ? 0.6 : 1,
+    }
+  ]} 
+  onPress={() => handleConfirmPickup(item.id)}
+  disabled={isStatusUpdating}
+>
+  {isStatusUpdating ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <>
+      <Feather name="check-square" size={18} color="#fff" />
+      <Text
+        style={[
+          styles.btnText,
+          {
+            color: '#fff',
+            marginLeft: 8,
+            fontWeight: 'bold'
+          }
+        ]}
       >
-        <Feather name="check-square" size={18} color="#fff" />
-        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Confirm Pickup</Text>
-      </TouchableOpacity>
+        Confirm Pickup
+      </Text>
+    </>
+  )}
+</TouchableOpacity>
     )}
 
-    {/* स्टेप 2: सामान पिकअप हो चुका है, अब राइडर जर्नी स्टार्ट करने के लिए बटन दबाएगा */}
-    {item.status?.toLowerCase() === 'picked_up' && (
-      <TouchableOpacity 
-        style={[styles.mapBtn, { backgroundColor: '#f59e0b', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
-        onPress={() => handleStartJourney(item.id)}
-      >
+    {/* स्टेप 2: सामान पिकअप हो चुका है, अब राइडर जर्नी स्टार्ट करेगा */}
+{item.status?.toLowerCase() === 'picked_up' && (
+  <TouchableOpacity 
+    style={[
+      styles.mapBtn,
+      {
+        backgroundColor: '#f59e0b',
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 10,
+        opacity: isStatusUpdating ? 0.6 : 1,
+      }
+    ]} 
+    onPress={() => handleStartJourney(item.id)}
+    disabled={isStatusUpdating}
+  >
+    {isStatusUpdating ? (
+      <ActivityIndicator size="small" color="#fff" />
+    ) : (
+      <>
         <Feather name="navigation" size={18} color="#fff" />
-        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Start Journey (Out for Delivery)</Text>
-      </TouchableOpacity>
+        <Text
+          style={[
+            styles.btnText,
+            {
+              color: '#fff',
+              marginLeft: 8,
+              fontWeight: 'bold'
+            }
+          ]}
+        >
+          Start Journey (Out for Delivery)
+        </Text>
+      </>
     )}
+  </TouchableOpacity>
+)}
 
-    {/* स्टेप 3: जब राइडर रास्ते में हो, तब कस्टमर के घर पहुँचकर OTP डालने का बटन दिखेगा */}
-    {item.status?.toLowerCase() === 'out_for_delivery' && (
-      <TouchableOpacity 
-        style={[styles.mapBtn, { backgroundColor: '#0284c7', width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 }]} 
-        onPress={() => handleConfirmDelivery(item.id)}
-      >
+    {/* स्टेप 3: कस्टमर के घर पहुँचकर OTP डालने का बटन */}
+{item.status?.toLowerCase() === 'out_for_delivery' && (
+  <TouchableOpacity 
+    style={[
+      styles.mapBtn,
+      {
+        backgroundColor: '#0284c7',
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 10,
+        opacity: isStatusUpdating ? 0.6 : 1,
+      }
+    ]} 
+    onPress={() => handleConfirmDelivery(item.id)}
+    disabled={isStatusUpdating}
+  >
+    {isStatusUpdating ? (
+      <ActivityIndicator size="small" color="#fff" />
+    ) : (
+      <>
         <Feather name="home" size={18} color="#fff" />
-        <Text style={[styles.btnText, { color: '#fff', marginLeft: 8, fontWeight: 'bold' }]}>Confirm Delivery (Enter OTP)</Text>
-      </TouchableOpacity>
+        <Text
+          style={[
+            styles.btnText,
+            {
+              color: '#fff',
+              marginLeft: 8,
+              fontWeight: 'bold'
+            }
+          ]}
+        >
+          Confirm Delivery (Enter OTP)
+        </Text>
+      </>
     )}
+  </TouchableOpacity>
+)}
   </View>
 
 {/* 🎯 लाइव इंडिकेटर: सामान पिकअप होने से लेकर डिलीवर होने तक (दोनों स्टेट्स में) लाइव ट्रैकिंग का रेड डॉट चमकेगा भाई */}
@@ -433,6 +538,7 @@ const renderTask = ({ item }: any) => {
       handleStartJourney={handleStartJourney} // 👈 यह मिसिंग था भाई, अब बिल्कुल सेफ़ है!
       handleConfirmDelivery={handleConfirmDelivery}
       navigation={navigation}
+       isStatusUpdating={updateStatusMutation.isPending}
     />
   );
 };
@@ -451,6 +557,12 @@ return (
       renderItem={renderTask}
       keyExtractor={(item) => item.id.toString()}
       contentContainerStyle={{ padding: 15 }}
+      refreshControl={
+    <RefreshControl
+      refreshing={isRefreshing}
+      onRefresh={handleRefresh}
+    />
+  }
       ListEmptyComponent={<Text style={styles.empty}>Abhi aapne koi batch claim nahi kiya hai.</Text>}
     />
 
@@ -484,56 +596,89 @@ return (
               <Text style={[styles.modalBtnText, { color: '#475569' }]}>Cancel</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.modalBtn, { backgroundColor: '#0284c7' }]} 
-              onPress={submitDeliveryOtp}
-            >
-              <Text style={[styles.modalBtnText, { color: '#fff' }]}>Verify & Deliver</Text>
-            </TouchableOpacity>
+           <TouchableOpacity 
+  style={[
+    styles.modalBtn,
+    {
+      backgroundColor: '#0284c7',
+      opacity: updateStatusMutation.isPending ? 0.6 : 1,
+    }
+  ]} 
+  onPress={submitDeliveryOtp}
+  disabled={updateStatusMutation.isPending}
+>
+  {updateStatusMutation.isPending ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <Text style={[styles.modalBtnText, { color: '#fff' }]}>
+      Verify & Deliver
+    </Text>
+  )}
+</TouchableOpacity>
           </View>
 
           {/* 🎯 FIRE BYPASS BUTTON: बिना ओटीपी के सीधे डिलीवरी */}
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 15 }} />
           
-          <TouchableOpacity 
-            style={styles.bypassBtn} 
-            onPress={() => {
-              Alert.alert(
-                "Bypass OTP?", 
-                "क्या आप कस्टमर के लोकेशन पर मौजूद हैं? बिना OTP सीधे डिलीवरी मार्क करने के लिए कन्फर्म करें।",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  { 
-                    text: "Yes, Deliver Directly", 
-                    onPress: () => {
-                      setOtpModalVisible(false);
-                      
-                      updateStatusMutation.mutate(
-                        { 
-                          batchId: selectedBatchForOtp!, 
-                          status: 'delivered', 
-                          otp: 'BYPASS_BY_RIDER' 
-                        },
-                        {
-                          onSuccess: async () => {
-                            // 🔥 FIX: बाईपास से डिलीवर होने पर भी बैकग्राउंड जीपीएस को तुरंत बंद करो भाई!
-                         await stopLiveTracking(selectedBatchForOtp!, 'BYPASS_DELIVERED');
-                            setActiveBatchId(null);
-                            setDeliveryOtp('');
-                            Alert.alert("सफलता", "ऑर्डर बिना OTP के सीधे डिलीवर मार्क कर दिया गया है। 🎉");
-                          }
-                        }
-                      );
-                    }
-                  }
-                ]
-              );
-            }}
-          >
-            <Text style={styles.bypassBtnText}>
-              Customer Doesn't Have OTP / Bypass
-            </Text>
-          </TouchableOpacity>
+         <TouchableOpacity 
+  style={[
+    styles.bypassBtn,
+    {
+      opacity: updateStatusMutation.isPending ? 0.6 : 1,
+    }
+  ]} 
+  disabled={updateStatusMutation.isPending}
+  onPress={() => {
+    Alert.alert(
+      "Bypass OTP?", 
+      "क्या आप कस्टमर के लोकेशन पर मौजूद हैं? बिना OTP सीधे डिलीवरी मार्क करने के लिए कन्फर्म करें।",
+      [
+        { 
+          text: "Cancel", 
+          style: "cancel" 
+        },
+        { 
+          text: "Yes, Deliver Directly", 
+          onPress: () => {
+            setOtpModalVisible(false);
+            
+            updateStatusMutation.mutate(
+              { 
+                batchId: selectedBatchForOtp!, 
+                status: 'delivered', 
+                otp: 'BYPASS_BY_RIDER' 
+              },
+              {
+                onSuccess: async () => {
+                  await stopLiveTracking(
+                    selectedBatchForOtp!,
+                    'BYPASS_DELIVERED'
+                  );
+
+                  setActiveBatchId(null);
+                  setDeliveryOtp('');
+
+                  Alert.alert(
+                    "सफलता",
+                    "ऑर्डर बिना OTP के सीधे डिलीवर मार्क कर दिया गया है। 🎉"
+                  );
+                }
+              }
+            );
+          }
+        }
+      ]
+    );
+  }}
+>
+  {updateStatusMutation.isPending ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <Text style={styles.bypassBtnText}>
+      Customer Doesn't Have OTP / Bypass
+    </Text>
+  )}
+</TouchableOpacity>
 
         </View>
       </View>
